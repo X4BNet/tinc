@@ -17,6 +17,8 @@
    with this program; if not, write to the Free Software Foundation, Inc., Foundation,
    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.  */
 
+// ANNOT: tinc uses a custom memory allocator.  Maybe we could experiment with different ones?
+
 #ifndef __TINC_XALLOC_H__
 #define __TINC_XALLOC_H__
 

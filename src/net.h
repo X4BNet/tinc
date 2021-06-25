@@ -80,6 +80,7 @@ typedef union sockaddr_t {
 #define SALEN(s) (s.sa_family==AF_INET?sizeof(struct sockaddr_in):sizeof(struct sockaddr_in6))
 #endif
 
+// ANNOT: packet definition
 typedef struct vpn_packet_t {
 	length_t len;           /* the actual number of bytes in the `data' field */
 	int priority;           /* priority or TOS */
@@ -104,6 +105,9 @@ typedef struct listen_socket_t {
 	io_t udp;
 	sockaddr_t sa;
 	bool bindto;
+    vpn_packet_t **packet_buffer;
+    int buffer_size;
+    int buffer_items;
 } listen_socket_t;
 
 #include "conf.h"
@@ -174,7 +178,7 @@ extern int setup_listen_socket(const sockaddr_t *);
 extern int setup_vpn_in_socket(const sockaddr_t *);
 extern bool send_sptps_data(void *handle, uint8_t type, const char *data, size_t len);
 extern bool receive_sptps_record(void *handle, uint8_t type, const char *data, uint16_t len);
-extern void send_packet(struct node_t *, vpn_packet_t *);
+extern void send_packet(struct node_t *, vpn_packet_t *, bool);
 extern void receive_tcppacket(struct connection_t *, const char *, int);
 extern void broadcast_packet(const struct node_t *, vpn_packet_t *);
 extern char *get_name(void);

@@ -18,6 +18,8 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+// ANNOT: this is where the character device is set up; packets go through the device
+
 #include "../system.h"
 
 #include <linux/if_tun.h>

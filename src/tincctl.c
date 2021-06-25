@@ -763,7 +763,7 @@ bool connect_tincd(bool verbose) {
 
 #ifdef SO_NOSIGPIPE
 	static const int one = 1;
-	setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, (void *)&one, sizeof one);
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (void *)&one, sizeof one);
 #endif
 
 	char data[4096];
@@ -1305,7 +1305,7 @@ char *get_my_name(bool verbose) {
 			continue;
 		if(*value) {
 			fclose(f);
-			return strdup(value);
+			return replace_name(value);
 		}
 	}
 
@@ -1673,18 +1673,6 @@ static int cmd_config(int argc, char *argv[]) {
 		sendline(fd, "%d %d", CONTROL, REQ_RELOAD);
 
 	return 0;
-}
-
-bool check_id(const char *name) {
-	if(!name || !*name)
-		return false;
-
-	for(int i = 0; i < strlen(name); i++) {
-		if(!isalnum(name[i]) && name[i] != '_')
-			return false;
-	}
-
-	return true;
 }
 
 static bool try_bind(int port) {

@@ -18,10 +18,10 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "logger.h"
 #include "system.h"
-
-#include "../src/logger.h"
 #include "utils.h"
+#include "xalloc.h"
 
 static const char hexadecimals[] = "0123456789ABCDEF";
 static const char base64_original[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -178,4 +178,55 @@ unsigned int bitfield_to_int(const void *bitfield, size_t size) {
 		size = sizeof value;
 	memcpy(&value, bitfield, size);
 	return value;
+}
+
+bool check_id(const char *id) {
+	if(!id || !*id)
+		return false;
+
+	for(; *id; id++)
+		if(!isalnum(*id) && *id != '_')
+			return false;
+
+	return true;
+}
+
+/* Windows doesn't define HOST_NAME_MAX. */
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
+
+char *replace_name(const char *name) {
+	char *ret_name;
+
+	if (name[0] == '$') {
+		char *envname = getenv(name + 1);
+		char hostname[HOST_NAME_MAX+1];
+		if (!envname) {
+			if (strcmp(name + 1, "HOST")) {
+				logger(DEBUG_ALWAYS, LOG_ERR, "Invalid Name: environment variable %s does not exist\n", name + 1);
+				return NULL;
+			}
+			if (gethostname(hostname, sizeof hostname) || !*hostname) {
+				logger(DEBUG_ALWAYS, LOG_ERR, "Could not get hostname: %s\n", sockstrerror(sockerrno));
+				return NULL;
+			}
+			hostname[HOST_NAME_MAX] = 0;
+			envname = hostname;
+		}
+		ret_name = xstrdup(envname);
+		for (char *c = ret_name; *c; c++)
+			if (!isalnum(*c))
+				*c = '_';
+	} else {
+		ret_name = xstrdup(name);
+	}
+
+	if (!check_id(ret_name)) {
+		logger(DEBUG_ALWAYS, LOG_ERR, "Invalid name for myself!");
+		free(ret_name);
+		return NULL;
+	}
+
+	return ret_name;
 }

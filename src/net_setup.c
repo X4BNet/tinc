@@ -43,6 +43,8 @@
 #include "utils.h"
 #include "xalloc.h"
 
+#define BUFFER_SIZE 16
+
 char *myport;
 static io_t device_io;
 devops_t devops;
@@ -402,41 +404,16 @@ void load_all_nodes(void) {
 
 char *get_name(void) {
 	char *name = NULL;
+	char *returned_name;
 
 	get_config_string(lookup_config(config_tree, "Name"), &name);
 
 	if(!name)
 		return NULL;
 
-	if(*name == '$') {
-		char *envname = getenv(name + 1);
-		char hostname[32] = "";
-		if(!envname) {
-			if(strcmp(name + 1, "HOST")) {
-				logger(DEBUG_ALWAYS, LOG_ERR, "Invalid Name: environment variable %s does not exist\n", name + 1);
-				return false;
-			}
-			if(gethostname(hostname, sizeof hostname) || !*hostname) {
-				logger(DEBUG_ALWAYS, LOG_ERR, "Could not get hostname: %s\n", sockstrerror(sockerrno));
-				return false;
-			}
-			hostname[31] = 0;
-			envname = hostname;
-		}
-		free(name);
-		name = xstrdup(envname);
-		for(char *c = name; *c; c++)
-			if(!isalnum(*c))
-				*c = '_';
-	}
-
-	if(!check_id(name)) {
-		logger(DEBUG_ALWAYS, LOG_ERR, "Invalid name for myself!");
-		free(name);
-		return false;
-	}
-
-	return name;
+	returned_name = replace_name(name);
+	free(name);
+	return returned_name;
 }
 
 bool setup_myself_reloadable(void) {
@@ -712,6 +689,10 @@ static bool add_listen_address(char *address, bool bindto) {
 			continue;
 		}
 
+        listen_socket[listen_sockets].packet_buffer = xmalloc(sizeof(char*) * BUFFER_SIZE);
+        listen_socket[listen_sockets].buffer_size = BUFFER_SIZE;
+        listen_socket[listen_sockets].buffer_items = 0;
+
 		io_add(&listen_socket[listen_sockets].tcp, handle_new_meta_connection, &listen_socket[listen_sockets], tcp_fd, IO_READ);
 		io_add(&listen_socket[listen_sockets].udp, handle_incoming_vpn_data, &listen_socket[listen_sockets], udp_fd, IO_READ);
 
@@ -961,6 +942,8 @@ static bool setup_myself(void) {
 	if(!devops.setup())
 		return false;
 
+    // ANNOT: here, a callback is registered such that whenever the tinc character device
+    // gets some data, this callback will be called
 	if(device_fd >= 0)
 		io_add(&device_io, handle_device_data, NULL, device_fd, IO_READ);
 
@@ -997,6 +980,10 @@ static bool setup_myself(void) {
 
 			io_add(&listen_socket[i].tcp, (io_cb_t)handle_new_meta_connection, &listen_socket[i], i + 3, IO_READ);
 			io_add(&listen_socket[i].udp, (io_cb_t)handle_incoming_vpn_data, &listen_socket[i], udp_fd, IO_READ);
+
+            listen_socket[i].packet_buffer = xmalloc(sizeof(char*) * BUFFER_SIZE);
+            listen_socket[i].buffer_size = BUFFER_SIZE;
+            listen_socket[i].buffer_items = 0;
 
 			if(debug_level >= DEBUG_CONNECTIONS) {
 				hostname = sockaddr2hostname(&sa);
@@ -1059,6 +1046,7 @@ static bool setup_myself(void) {
 
 /*
   initialize network
+  ANNOT: the bulk of bootstrap logic
 */
 bool setup_network(void) {
 	init_connections();
@@ -1126,6 +1114,8 @@ void close_network_connections(void) {
 		io_del(&listen_socket[i].udp);
 		close(listen_socket[i].tcp.fd);
 		close(listen_socket[i].udp.fd);
+
+        free(listen_socket[i].packet_buffer);
 	}
 
 	exit_requests();

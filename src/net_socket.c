@@ -20,6 +20,9 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+// ANNOT: where raw sockets are used.  We could probably experiment with using faster socket 
+// implementations like netmap.
+
 #include "system.h"
 
 #include "conf.h"

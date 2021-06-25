@@ -318,7 +318,7 @@ static void route_ipv4_unreachable(node_t *source, vpn_packet_t *packet, length_
 
 	packet->len = ether_size + ip_size + icmp_size + oldlen;
 
-	send_packet(source, packet);
+	send_packet(source, packet, false);
 }
 
 /* RFC 791 */
@@ -365,7 +365,7 @@ static void fragment_ipv4_packet(node_t *dest, vpn_packet_t *packet, length_t et
 		memcpy(fragment.data + ether_size, &ip, ip_size);
 		fragment.len = ether_size + ip_size + len;
 
-		send_packet(dest, &fragment);
+		send_packet(dest, &fragment, false);
 
 		ip_off += len / 8;
 	}
@@ -437,7 +437,7 @@ static void route_ipv4(node_t *source, vpn_packet_t *packet) {
 
 	clamp_mss(source, via, packet);
 
-	send_packet(subnet->owner, packet);
+	send_packet(subnet->owner, packet, false);
 }
 
 /* RFC 2463 */
@@ -517,7 +517,7 @@ static void route_ipv6_unreachable(node_t *source, vpn_packet_t *packet, length_
 
 	packet->len = ether_size + ip6_size + ntohl(pseudo.length);
 
-	send_packet(source, packet);
+	send_packet(source, packet, false);
 }
 
 static void route_neighborsol(node_t *source, vpn_packet_t *packet);
@@ -589,7 +589,7 @@ static void route_ipv6(node_t *source, vpn_packet_t *packet) {
 
 	clamp_mss(source, via, packet);
 
-	send_packet(subnet->owner, packet);
+	send_packet(subnet->owner, packet, false);
 }
 
 /* RFC 2461 */
@@ -730,7 +730,7 @@ static void route_neighborsol(node_t *source, vpn_packet_t *packet) {
 	if(has_opt)
 		memcpy(packet->data + ether_size + ip6_size + ns_size, &opt, opt_size);
 
-	send_packet(source, packet);
+	send_packet(source, packet, true);
 }
 
 /* RFC 826 */
@@ -796,7 +796,7 @@ static void route_arp(node_t *source, vpn_packet_t *packet) {
 
 	memcpy(packet->data + ether_size, &arp, arp_size);
 
-	send_packet(source, packet);
+	send_packet(source, packet, true);
 }
 
 static void route_mac(node_t *source, vpn_packet_t *packet) {
@@ -867,7 +867,7 @@ static void route_mac(node_t *source, vpn_packet_t *packet) {
 
 	clamp_mss(source, via, packet);
 
-	send_packet(subnet->owner, packet);
+	send_packet(subnet->owner, packet, true);
 }
 
 static void send_pcap(vpn_packet_t *packet) {
@@ -944,7 +944,7 @@ void route(node_t *source, vpn_packet_t *packet) {
 		send_pcap(packet);
 
 	if(forwarding_mode == FMODE_KERNEL && source != myself) {
-		send_packet(myself, packet);
+		send_packet(myself, packet, false);
 		return;
 	}
 

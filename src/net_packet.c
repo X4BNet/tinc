@@ -46,15 +46,33 @@
 #include "utils.h"
 #include "xalloc.h"
 
+#include <sys/socket.h>
+#include <sys/uio.h>
+
+typedef struct packet_thread_info_t {
+    listen_socket_t listen_socket;
+    node_t *n;
+    int origlen;
+	const sockaddr_t *sa;
+} packet_thread_info_t;
+
+//struct iovec
+//{
+//    void *iov_base;   /* Pointer to data.  */
+//    size_t iov_len;   /* Length of data.  */
+//};
+
 int keylifetime = 0;
 #ifdef HAVE_LZO
 static char lzo_wrkmem[LZO1X_999_MEM_COMPRESS > LZO1X_1_MEM_COMPRESS ? LZO1X_999_MEM_COMPRESS : LZO1X_1_MEM_COMPRESS];
 #endif
 
-static void send_udppacket(node_t *, vpn_packet_t *);
+static void send_udppacket(node_t *, vpn_packet_t *, bool);
 
 unsigned replaywin = 16;
 bool localdiscovery = true;
+
+int packets_exchanged = 0;
 
 #define MAX_SEQNO 1073741824
 
@@ -147,7 +165,7 @@ static void send_mtu_probe_handler(void *data) {
 
 		logger(DEBUG_TRAFFIC, LOG_INFO, "Sending MTU probe length %d to %s (%s)", len, n->name, n->hostname);
 
-		send_udppacket(n, &packet);
+		send_udppacket(n, &packet, true);
 	}
 
 	n->status.send_locally = false;
@@ -182,7 +200,7 @@ static void mtu_probe_h(node_t *n, vpn_packet_t *packet, length_t len) {
 		/* It's a probe request, send back a reply */
 
 		/* Type 2 probe replies were introduced in protocol 17.3 */
-		if ((n->options >> 24) == 3) {
+		if ((n->options >> 24) >= 3) {
 			uint8_t* data = packet->data;
 			*data++ = 2;
 			uint16_t len16 = htons(len); memcpy(data, &len16, 2); data += 2;
@@ -201,7 +219,7 @@ static void mtu_probe_h(node_t *n, vpn_packet_t *packet, length_t len) {
 
 		bool udp_confirmed = n->status.udp_confirmed;
 		n->status.udp_confirmed = true;
-		send_udppacket(n, packet);
+		send_udppacket(n, packet, true);
 		n->status.udp_confirmed = udp_confirmed;
 	} else {
 		length_t probelen = len;
@@ -618,7 +636,50 @@ static void choose_local_address(const node_t *n, const sockaddr_t **sa, int *so
 	}
 }
 
-static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
+static void send_buffered_packets(packet_thread_info_t *packet_thread_info) {
+    listen_socket_t listen_socket = packet_thread_info->listen_socket;
+    node_t *n = packet_thread_info->n;
+    int origlen = packet_thread_info->origlen;
+    const sockaddr_t *sa = packet_thread_info->sa;
+    int i;
+
+    struct mmsghdr *msghdrs = xmalloc(sizeof(struct mmsghdr) * listen_socket.buffer_items);
+    struct iovec *iovecs = xmalloc(sizeof(struct iovec) * listen_socket.buffer_items);
+
+    for (i = 0; i < listen_socket.buffer_items; i++) {
+        iovecs[i].iov_base = (char *) &(listen_socket.packet_buffer[i]->seqno);
+        iovecs[i].iov_len = listen_socket.packet_buffer[i]->len;
+
+        msghdrs[i].msg_hdr.msg_name = &sa->sa;
+        msghdrs[i].msg_hdr.msg_namelen = SALEN(sa->sa);
+        msghdrs[i].msg_hdr.msg_iov = iovecs + i;
+        msghdrs[i].msg_hdr.msg_iovlen = 1;
+        msghdrs[i].msg_hdr.msg_control = NULL;
+        msghdrs[i].msg_hdr.msg_controllen = 0;
+        msghdrs[i].msg_hdr.msg_flags= 0;
+    }
+
+    if(sendmmsg(listen_socket.udp.fd, msghdrs, listen_socket.buffer_items, 0) < 0 && !sockwouldblock(sockerrno)) {
+        if(sockmsgsize(sockerrno)) {
+            if(n->maxmtu >= origlen)
+                n->maxmtu = origlen - 1;
+            if(n->mtu >= origlen)
+                n->mtu = origlen - 1;
+        } else
+            logger(DEBUG_TRAFFIC, LOG_WARNING, "Error sending packet to %s (%s): %s", n->name, n->hostname, sockstrerror(sockerrno));
+    }
+
+    for (i = 0; i < listen_socket.buffer_items; i++) {
+        free(listen_socket.packet_buffer[i]);
+    }
+    free(msghdrs);
+    free(iovecs);
+}
+
+// ANNOT: this function does a lot of things: compression, encryption, producing digest... mose of
+// the optimization will likely happen here
+static void send_udppacket(node_t *n, vpn_packet_t *origpkt, bool immediate) {
+    //logger(DEBUG_ALWAYS, LOG_ERR, "Sending udp packet");
 	vpn_packet_t pkt1, pkt2;
 	vpn_packet_t *pkt[] = { &pkt1, &pkt2, &pkt1, &pkt2 };
 	vpn_packet_t *inpkt = origpkt;
@@ -662,7 +723,7 @@ static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
 				n->name, n->hostname, n != n->nexthop ? n->nexthop->name : "TCP");
 
 		if(n != n->nexthop)
-			send_packet(n->nexthop, origpkt);
+			send_packet(n->nexthop, origpkt, immediate);
 		else
 			send_tcppacket(n->nexthop->connection, origpkt);
 
@@ -718,6 +779,8 @@ static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
 
 	const sockaddr_t *sa = NULL;
 	int sock;
+    int i;
+    packet_thread_info_t packet_thread_info;
 
 	if(n->status.send_locally)
 		choose_local_address(n, &sa, &sock);
@@ -734,15 +797,19 @@ static void send_udppacket(node_t *n, vpn_packet_t *origpkt) {
 	}
 #endif
 
-	if(sendto(listen_socket[sock].udp.fd, (char *) &inpkt->seqno, inpkt->len, 0, &sa->sa, SALEN(sa->sa)) < 0 && !sockwouldblock(sockerrno)) {
-		if(sockmsgsize(sockerrno)) {
-			if(n->maxmtu >= origlen)
-				n->maxmtu = origlen - 1;
-			if(n->mtu >= origlen)
-				n->mtu = origlen - 1;
-		} else
-			logger(DEBUG_TRAFFIC, LOG_WARNING, "Error sending packet to %s (%s): %s", n->name, n->hostname, sockstrerror(sockerrno));
-	}
+    listen_socket[sock].packet_buffer[listen_socket[sock].buffer_items] = xmalloc(sizeof(vpn_packet_t));
+    memcpy(listen_socket[sock].packet_buffer[listen_socket[sock].buffer_items], inpkt, sizeof(vpn_packet_t));
+    listen_socket[sock].buffer_items++;
+
+    if (listen_socket[sock].buffer_items == listen_socket[sock].buffer_size || packets_exchanged < 2000 || immediate == true) {
+        packet_thread_info.listen_socket = listen_socket[sock];
+        packet_thread_info.n = n;
+        packet_thread_info.origlen = origlen;
+        packet_thread_info.sa = sa;
+        send_buffered_packets(&packet_thread_info);
+        listen_socket[sock].buffer_items = 0;
+        packets_exchanged = packets_exchanged + 1;
+    }
 
 end:
 	origpkt->len = origlen;
@@ -870,10 +937,13 @@ bool receive_sptps_record(void *handle, uint8_t type, const char *data, uint16_t
 	return true;
 }
 
+// ANNOT: where the user space talks to the kernel space; encryption happens here
+// Look into send_udppacket
+
 /*
   send a packet to the given vpn ip.
 */
-void send_packet(node_t *n, vpn_packet_t *packet) {
+void send_packet(node_t *n, vpn_packet_t *packet, bool immediate) {
 	node_t *via;
 
 	if(n == myself) {
@@ -912,7 +982,7 @@ void send_packet(node_t *n, vpn_packet_t *packet) {
 		if(!send_tcppacket(via->connection, packet))
 			terminate_connection(via->connection, true);
 	} else
-		send_udppacket(via, packet);
+		send_udppacket(via, packet, immediate);
 }
 
 /* Broadcast a packet using the minimum spanning tree */
@@ -920,7 +990,7 @@ void send_packet(node_t *n, vpn_packet_t *packet) {
 void broadcast_packet(const node_t *from, vpn_packet_t *packet) {
 	// Always give ourself a copy of the packet.
 	if(from != myself)
-		send_packet(myself, packet);
+		send_packet(myself, packet, true);
 
 	// In TunnelServer mode, do not forward broadcast packets.
 	// The MST might not be valid and create loops.
@@ -937,7 +1007,7 @@ void broadcast_packet(const node_t *from, vpn_packet_t *packet) {
 		case BMODE_MST:
 			for list_each(connection_t, c, connection_list)
 				if(c->edge && c->status.mst && c != from->nexthop->connection)
-					send_packet(c->node, packet);
+					send_packet(c->node, packet, true);
 			break;
 
 		// In direct mode, we send copies to each node we know of.
@@ -949,7 +1019,7 @@ void broadcast_packet(const node_t *from, vpn_packet_t *packet) {
 
 			for splay_each(node_t, n, node_tree)
 				if(n->status.reachable && n != myself && ((n->via == myself && n->nexthop == n) || n->via == n))
-					send_packet(n, packet);
+					send_packet(n, packet, true);
 			break;
 
 		default:
@@ -1028,6 +1098,9 @@ void handle_incoming_vpn_data(void *data, int flags) {
 	receive_udppacket(n, &pkt);
 }
 
+// ANNOT: this is the key callback here.  Whenever the tinc character device gets some data, this
+// callback is invoked.  Note that the actual implementation of the read() function used here is
+// platform-dependent.  See linux/device.c and bsd/device.c for details.
 void handle_device_data(void *data, int flags) {
 	vpn_packet_t packet;
 

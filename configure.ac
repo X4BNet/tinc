@@ -3,7 +3,6 @@ dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.61)
 AC_INIT([tinc], [1.1pre10])
 AC_CONFIG_SRCDIR([src/tincd.c])
-AC_GNU_SOURCE
 AM_INIT_AUTOMAKE([check-news std-options subdir-objects -Wall])
 AC_CONFIG_HEADERS([config.h])
 
@@ -15,6 +14,7 @@ AC_DEFINE([__USE_BSD], 1, [Enable BSD extensions])
 
 dnl Checks for programs.
 AC_PROG_CC_C99
+AM_PROG_CC_C_O
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_LN_S
@@ -153,7 +153,7 @@ AS_IF([test "x$enable_hardening" != "xno"],
    AX_CHECK_LINK_FLAG([-Wl,-z,relro], [LDFLAGS="$LDFLAGS -Wl,-z,relro"])
    AX_CHECK_LINK_FLAG([-Wl,-z,now], [LDFLAGS="$LDFLAGS -Wl,-z,now"])
   ]
-);
+)
 
 dnl Checks for header files.
 dnl We do this in multiple stages, because unlike Linux all the other operating systems really suck and don't include their own dependencies.

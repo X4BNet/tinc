@@ -35,6 +35,8 @@
 #if defined(PF_PACKET) && defined(ETH_P_ALL) && defined(AF_PACKET) && defined(SIOCGIFINDEX)
 static char *device_info;
 
+// ANNOT: this seems to be where tinc registers itself with the network card
+
 static bool setup_device(void) {
 	struct ifreq ifr;
 	struct sockaddr_ll sa;
