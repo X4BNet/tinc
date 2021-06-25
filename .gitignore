@@ -48,3 +48,4 @@ Makefile.in
 core*
 heaptrack.*
 *.tar.gz*
+.vscode/

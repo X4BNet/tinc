@@ -18,18 +18,30 @@
 */
 
 #include "system.h"
+#include "dropin.h"
+
+#ifdef HAVE_EPOLL_CTL
+#include <sys/epoll.h>
+#endif
 
 #include "dropin.h"
 #include "event.h"
 #include "net.h"
 #include "utils.h"
 #include "xalloc.h"
+#include "logger.h"
 
 struct timeval now;
 
 #ifndef HAVE_MINGW
+
+#ifdef HAVE_EPOLL_CTL
+static int epollset = 0;
+#else
 static fd_set readfds;
 static fd_set writefds;
+#endif
+
 #else
 static const long READ_EVENTS = FD_READ | FD_ACCEPT | FD_CLOSE;
 static const long WRITE_EVENTS = FD_WRITE | FD_CONNECT;
@@ -125,7 +137,11 @@ void io_add_event(io_t *io, io_cb_t cb, void *data, WSAEVENT event) {
 #endif
 
 void io_set(io_t *io, int flags) {
-	if(flags == io->flags) {
+#ifdef HAVE_EPOLL_CTL
+    if (!epollset) epollset = epoll_create1(0);
+#endif
+
+	if (flags == io->flags){
 		return;
 	}
 
@@ -136,7 +152,31 @@ void io_set(io_t *io, int flags) {
 	}
 
 #ifndef HAVE_MINGW
+#ifdef HAVE_EPOLL_CTL
+    struct epoll_event ev;
+    ev.data.fd = io->fd;
 
+    epoll_ctl(epollset, EPOLL_CTL_DEL, io->fd, NULL);
+    if ((flags & IO_READ) && (flags & IO_WRITE)) {
+        ev.events = EPOLLIN | EPOLLOUT;
+    }
+
+    else if (flags & IO_READ) {
+        ev.events = EPOLLIN;
+    }
+
+    else if (flags & IO_WRITE) {
+        ev.events = EPOLLOUT;
+    }
+
+    else {
+        return;
+    }
+
+    if (epoll_ctl(epollset, EPOLL_CTL_ADD, io->fd, &ev) < 0) {
+        perror("epoll_ctl_add");
+    }
+#else
 	if(flags & IO_READ) {
 		FD_SET(io->fd, &readfds);
 	} else {
@@ -148,7 +188,7 @@ void io_set(io_t *io, int flags) {
 	} else {
 		FD_CLR(io->fd, &writefds);
 	}
-
+#endif
 #else
 	long events = 0;
 
@@ -320,23 +360,48 @@ bool event_loop(void) {
 	running = true;
 
 #ifndef HAVE_MINGW
+
+#ifdef HAVE_EPOLL_CTL
+    if (!epollset) epollset = epoll_create1(0);
+#else
 	fd_set readable;
 	fd_set writable;
-
+#endif
+	
 	while(running) {
 		struct timeval diff;
 		struct timeval *tv = get_time_remaining(&diff);
+#ifndef HAVE_EPOLL_CTL
 		memcpy(&readable, &readfds, sizeof(readable));
 		memcpy(&writable, &writefds, sizeof(writable));
+#endif
 
-		int fds = 0;
+		int maxfds = 1;
 
 		if(io_tree.tail) {
+			// use the max FD number to detirmine the max size of events
+			// this abuses the fact that:
+			// a) tinc does not allocate new sockets during operation
+			// b) that tinc does not have many sockets
+			// c) that sockets are allocated from 0 on all epoll supported systems
 			io_t *last = io_tree.tail->data;
-			fds = last->fd + 1;
+			maxfds = last->fd + 1;
+
+			// An upper limit to prevent excessive stack usage should these conditions ever not be true
+			if(maxfds > EPOL_MAX_EVENTS_PER_LOOP){
+				maxfds = EPOL_MAX_EVENTS_PER_LOOP;
+			}
 		}
 
-		int n = select(fds, &readable, &writable, NULL, tv);
+
+#ifdef HAVE_EPOLL_CTL
+        struct epoll_event events[maxfds];
+        int timeout = tv->tv_sec * 1000 + tv->tv_usec / 1000;
+        if (timeout == 0 && tv->tv_usec > 0) timeout = 1;
+        int n = epoll_wait(epollset, events, maxfds, tv->tv_sec * 1000 + tv->tv_usec / 1000);
+#else
+		int n = select(maxfds, &readable, &writable, NULL, tv);
+#endif
 
 		if(n < 0) {
 			if(sockwouldblock(sockerrno)) {
@@ -352,7 +417,25 @@ bool event_loop(void) {
 
 		unsigned int curgen = io_tree.generation;
 
+        // MH: iterating over events inside the splay tree is very bad
+		//     we should be able to use the epoll_event epoll_data_t (data member)
+		//     instead
 		for splay_each(io_t, io, &io_tree) {
+#ifdef HAVE_EPOLL_CTL
+            for (int i = 0; i < n; i++) {
+                if (events[i].data.fd == io->fd) {
+                    if (events[i].events & EPOLLIN) {
+				        io->cb(io->data, IO_READ);
+                    }
+
+                    if (events[i].events & EPOLLOUT) {
+				        io->cb(io->data, IO_WRITE);
+                    }
+
+					break;
+                }
+            }
+#else
 			if(FD_ISSET(io->fd, &writable)) {
 				io->cb(io->data, IO_WRITE);
 			} else if(FD_ISSET(io->fd, &readable)) {
@@ -360,13 +443,13 @@ bool event_loop(void) {
 			} else {
 				continue;
 			}
-
+#endif
 			/*
-			   There are scenarios in which the callback will remove another io_t from the tree
-			   (e.g. closing a double connection). Since splay_each does not support that, we
-			   need to exit the loop if that happens. That's okay, since any remaining events will
-			   get picked up by the next select() call.
-			 */
+			There are scenarios in which the callback will remove another io_t from the tree
+			(e.g. closing a double connection). Since splay_each does not support that, we
+			need to exit the loop if that happens. That's okay, since any remaining events will
+			get picked up by the next select() call.
+			*/
 			if(curgen != io_tree.generation) {
 				break;
 			}

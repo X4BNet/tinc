@@ -18,6 +18,7 @@ AC_DEFINE([__USE_BSD], 1, [Enable BSD extensions])
 
 dnl Checks for programs.
 AC_PROG_CC_C99
+AM_PROG_CC_C_O
 AC_PROG_CPP
 AC_PROG_INSTALL
 AM_PROG_CC_C_O
@@ -163,7 +164,7 @@ AS_IF([test "x$enable_hardening" != "xno"],
    AX_CHECK_LINK_FLAG([-Wl,-z,relro], [LDFLAGS="$LDFLAGS -Wl,-z,relro"])
    AX_CHECK_LINK_FLAG([-Wl,-z,now], [LDFLAGS="$LDFLAGS -Wl,-z,now"])
   ]
-);
+)
 
 dnl Checks for header files.
 dnl We do this in multiple stages, because unlike Linux all the other operating systems really suck and don't include their own dependencies.
@@ -190,7 +191,7 @@ AC_CHECK_TYPES([struct ether_header, struct arphdr, struct ether_arp, struct ip,
 
 dnl Checks for library functions.
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS([asprintf daemon fchmod flock fork gettimeofday mlockall putenv recvmmsg strsignal nanosleep unsetenv vsyslog devname fdevname],
+AC_CHECK_FUNCS([asprintf daemon fchmod flock fork gettimeofday mlockall epoll_ctl putenv recvmmsg strsignal nanosleep unsetenv vsyslog devname fdevname],
   [], [], [#include "$srcdir/src/have.h"]
 )
 
