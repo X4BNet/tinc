@@ -28,18 +28,22 @@
 static char *program_name;
 
 void logger(int level, int priority, const char *format, ...) {
+	(void)level;
+	(void)priority;
 	va_list ap;
+
 	va_start(ap, format);
 	vfprintf(stderr, format, ap);
 	va_end(ap);
+
 	fputc('\n', stderr);
 }
 
 static void usage() {
 	fprintf(stderr, "Usage: %s [options] private_key_file public_key_file\n\n", program_name);
 	fprintf(stderr, "Valid options are:\n"
-			"  --help  Display this help and exit.\n"
-			"\n");
+	        "  --help  Display this help and exit.\n"
+	        "\n");
 	fprintf(stderr, "Report bugs to tinc@tinc-vpn.org.\n");
 }
 
@@ -54,20 +58,20 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 
 	while((r = getopt_long(argc, argv, "", long_options, &option_index)) != EOF) {
-		switch (r) {
-			case 0:   /* long option */
-				break;
+		switch(r) {
+		case 0:   /* long option */
+			break;
 
-			case '?': /* wrong options */
-				usage();
-				return 1;
+		case '?': /* wrong options */
+			usage();
+			return 1;
 
-			case 1: /* help */
-				usage();
-				return 0;
+		case 1: /* help */
+			usage();
+			return 0;
 
-			default:
-				break;
+		default:
+			break;
 		}
 	}
 
@@ -83,12 +87,19 @@ int main(int argc, char *argv[]) {
 	crypto_init();
 
 	ecdsa_t *key = ecdsa_generate();
-	if(!key)
+
+	if(!key) {
 		return 1;
-	
+	}
+
 	FILE *fp = fopen(argv[1], "w");
+
 	if(fp) {
-		ecdsa_write_pem_private_key(key, fp);
+		if(!ecdsa_write_pem_private_key(key, fp)) {
+			fprintf(stderr, "Could not write ECDSA private key\n");
+			return 1;
+		}
+
 		fclose(fp);
 	} else {
 		fprintf(stderr, "Could not open '%s' for writing: %s\n", argv[1], strerror(errno));
@@ -96,8 +107,12 @@ int main(int argc, char *argv[]) {
 	}
 
 	fp = fopen(argv[2], "w");
+
 	if(fp) {
-		ecdsa_write_pem_public_key(key, fp);
+		if(!ecdsa_write_pem_public_key(key, fp)) {
+			fprintf(stderr, "Could not write ECDSA public key\n");
+		}
+
 		fclose(fp);
 	} else {
 		fprintf(stderr, "Could not open '%s' for writing: %s\n", argv[2], strerror(errno));

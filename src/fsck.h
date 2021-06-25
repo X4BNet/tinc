@@ -1,6 +1,9 @@
+#ifndef TINC_FSCK_H
+#define TINC_FSCK_H
+
 /*
-    ecdsagen.c -- ECDSA key generation and export
-    Copyright (C) 2011-2013 Guus Sliepen <guus@tinc-vpn.org>
+    fsck.h -- header for fsck.c.
+    Copyright (C) 2012 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,25 +20,6 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "../system.h"
+extern int fsck(const char *argv0);
 
-#include "../ecdsagen.h"
-#include "../utils.h"
-#include "../xalloc.h"
-
-// Generate ECDSA key
-
-ecdsa_t *ecdsa_generate(void) {
-	logger(DEBUG_ALWAYS, LOG_ERR, "EC support using libgcrypt not implemented");
-	return NULL;
-}
-
-// Write PEM ECDSA keys
-
-bool ecdsa_write_pem_public_key(ecdsa_t *ecdsa, FILE *fp) {
-	return false;
-}
-
-bool ecdsa_write_pem_private_key(ecdsa_t *ecdsa, FILE *fp) {
-	return false;
-}
+#endif

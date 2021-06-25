@@ -1,7 +1,7 @@
 /*
     dropin.c -- a set of drop-in replacements for libc functions
     Copyright (C) 2000-2005 Ivo Timmermans,
-                  2000-2013 Guus Sliepen <guus@tinc-vpn.org>
+                  2000-2018 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -50,8 +50,9 @@ int daemon(int nochdir, int noclose) {
 	}
 
 	/* If we are the parent, terminate */
-	if(pid)
+	if(pid) {
 		exit(0);
+	}
 
 	/* Detach by becoming the new process group leader */
 	if(setsid() < 0) {
@@ -81,42 +82,10 @@ int daemon(int nochdir, int noclose) {
 
 	return 0;
 #else
+	(void)nochdir;
+	(void)noclose;
 	return -1;
 #endif
-}
-#endif
-
-#ifndef HAVE_GET_CURRENT_DIR_NAME
-/*
-  Replacement for the GNU get_current_dir_name function:
-
-  get_current_dir_name will malloc(3) an array big enough to hold the
-  current directory name.  If the environment variable PWD is set, and
-  its value is correct, then that value will be returned.
-*/
-char *get_current_dir_name(void) {
-	size_t size;
-	char *buf;
-	char *r;
-
-	/* Start with 100 bytes.  If this turns out to be insufficient to
-	   contain the working directory, double the size.  */
-	size = 100;
-	buf = xmalloc(size);
-
-	errno = 0;                                      /* Success */
-	r = getcwd(buf, size);
-
-	/* getcwd returns NULL and sets errno to ERANGE if the bufferspace
-	   is insufficient to contain the entire working directory.  */
-	while(r == NULL && errno == ERANGE) {
-		free(buf);
-		size <<= 1;                             /* double the size */
-		buf = xmalloc(size);
-		r = getcwd(buf, size);
-	}
-
-	return buf;
 }
 #endif
 
@@ -142,11 +111,12 @@ int vasprintf(char **buf, const char *fmt, va_list ap) {
 	status = vsnprintf(*buf, len, fmt, aq);
 	va_end(aq);
 
-	if(status >= 0)
+	if(status >= 0) {
 		*buf = xrealloc(*buf, status + 1);
+	}
 
 	if(status > len - 1) {
-		len = status;
+		len = status + 1;
 		va_copy(aq, ap);
 		status = vsnprintf(*buf, len, fmt, aq);
 		va_end(aq);
@@ -174,10 +144,10 @@ int gettimeofday(struct timeval *tv, void *tz) {
 }
 #endif
 
-#ifndef HAVE_USLEEP
-int usleep(long long usec) {
-	struct timeval tv = {usec / 1000000, (usec / 1000) % 1000};
-	select(0, NULL, NULL, NULL, &tv);
-	return 0;
+#ifndef HAVE_NANOSLEEP
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+	(void)rem;
+	struct timeval tv = {req->tv_sec, req->tv_nsec / 1000};
+	return select(0, NULL, NULL, NULL, &tv);
 }
 #endif

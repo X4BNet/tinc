@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. ./testlib.sh
+. "${0%/*}/testlib.sh"
 
 # Initialize one node
 
@@ -14,6 +14,10 @@ cat >$d1/tinc-up <<EOF
 #!/bin/sh
 read pid rest <$d1/pid
 (sleep 0.1; kill \$pid) &
+EOF
+
+cat >$d1/tinc-up.cmd <<EOF
+start /min ../$tinc $c1 stop
 EOF
 
 # Test tincd command line options that should work

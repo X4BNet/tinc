@@ -1,6 +1,6 @@
 /*
     sptps_speed.c -- SPTPS benchmark
-    Copyright (C) 2013 Guus Sliepen <guus@tinc-vpn.org>,
+    Copyright (C) 2013-2014 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,28 +29,42 @@
 #include "sptps.h"
 
 // Symbols necessary to link with logger.o
-bool send_request(void *c, const char *msg, ...) { return false; }
+bool send_request(void *c, const char *msg, ...) {
+	return false;
+}
 struct list_t *connection_list = NULL;
-bool send_meta(void *c, const char *msg , int len) { return false; }
+bool send_meta(void *c, const char *msg, int len) {
+	return false;
+}
 char *logfilename = NULL;
+bool do_detach = false;
 struct timeval now;
 
-static bool send_data(void *handle, uint8_t type, const char *data, size_t len) {
+static bool send_data(void *handle, uint8_t type, const void *data, size_t len) {
 	int fd = *(int *)handle;
 	send(fd, data, len, 0);
 	return true;
 }
 
-static bool receive_record(void *handle, uint8_t type, const char *data, uint16_t len) {
+static bool receive_record(void *handle, uint8_t type, const void *data, uint16_t len) {
 	return true;
 }
 
 static void receive_data(sptps_t *sptps) {
-	char buf[4096];
+	char buf[4096], *bufp = buf;
 	int fd = *(int *)sptps->handle;
-	size_t len = recv(fd, buf, sizeof buf, 0);
-	if(!sptps_receive_data(sptps, buf, len))
-		abort();
+	size_t len = recv(fd, buf, sizeof(buf), 0);
+
+	while(len) {
+		size_t done = sptps_receive_data(sptps, bufp, len);
+
+		if(!done) {
+			abort();
+		}
+
+		bufp += done;
+		len -= done;
+	}
 }
 
 struct timespec start;
@@ -67,8 +81,10 @@ static void clock_start() {
 static bool clock_countto(double seconds) {
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
 	elapsed = end.tv_sec + end.tv_nsec * 1e-9 - start.tv_sec - start.tv_nsec * 1e-9;
-	if(elapsed < seconds)
+
+	if(elapsed < seconds) {
 		return ++count;
+	}
 
 	rate = count / elapsed;
 	return false;
@@ -83,15 +99,18 @@ int main(int argc, char *argv[]) {
 
 	crypto_init();
 
-	randomize(buf1, sizeof buf1);
-	randomize(buf2, sizeof buf2);
-	randomize(buf3, sizeof buf3);
+	randomize(buf1, sizeof(buf1));
+	randomize(buf2, sizeof(buf2));
+	randomize(buf3, sizeof(buf3));
 
 	// Key generation
 
 	fprintf(stderr, "Generating keys for %lg seconds: ", duration);
-	for(clock_start(); clock_countto(duration);)
+
+	for(clock_start(); clock_countto(duration);) {
 		ecdsa_free(ecdsa_generate());
+	}
+
 	fprintf(stderr, "%17.2lf op/s\n", rate);
 
 	key1 = ecdsa_generate();
@@ -100,27 +119,46 @@ int main(int argc, char *argv[]) {
 	// Ed25519 signatures
 
 	fprintf(stderr, "Ed25519 sign for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);)
-		ecdsa_sign(key1, buf1, 256, buf2);
-	fprintf(stderr, "%22.2lf op/s\n", rate);
+		if(!ecdsa_sign(key1, buf1, 256, buf2)) {
+			return 1;
+		}
+
+	fprintf(stderr, "%20.2lf op/s\n", rate);
 
 	fprintf(stderr, "Ed25519 verify for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);)
-		ecdsa_verify(key1, buf1, 256, buf2);
-	fprintf(stderr, "%20.2lf op/s\n", rate);
+		if(!ecdsa_verify(key1, buf1, 256, buf2)) {
+			fprintf(stderr, "Signature verification failed\n");
+			return 1;
+		}
+
+	fprintf(stderr, "%18.2lf op/s\n", rate);
 
 	ecdh1 = ecdh_generate_public(buf1);
 	fprintf(stderr, "ECDH for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);) {
 		ecdh2 = ecdh_generate_public(buf2);
-		ecdh_compute_shared(ecdh2, buf1, buf3);
+
+		if(!ecdh2) {
+			return 1;
+		}
+
+		if(!ecdh_compute_shared(ecdh2, buf1, buf3)) {
+			return 1;
+		}
 	}
+
 	fprintf(stderr, "%28.2lf op/s\n", rate);
 	ecdh_free(ecdh1);
 
 	// SPTPS authentication phase
 
 	int fd[2];
+
 	if(socketpair(AF_UNIX, SOCK_STREAM, 0, fd)) {
 		fprintf(stderr, "Could not create a UNIX socket pair: %s\n", sockstrerror(sockerrno));
 		return 1;
@@ -129,43 +167,62 @@ int main(int argc, char *argv[]) {
 	struct pollfd pfd[2] = {{fd[0], POLLIN}, {fd[1], POLLIN}};
 
 	fprintf(stderr, "SPTPS/TCP authenticate for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);) {
 		sptps_start(&sptps1, fd + 0, true, false, key1, key2, "sptps_speed", 11, send_data, receive_record);
 		sptps_start(&sptps2, fd + 1, false, false, key2, key1, "sptps_speed", 11, send_data, receive_record);
+
 		while(poll(pfd, 2, 0)) {
-			if(pfd[0].revents)
+			if(pfd[0].revents) {
 				receive_data(&sptps1);
-			if(pfd[1].revents)
+			}
+
+			if(pfd[1].revents) {
 				receive_data(&sptps2);
+			}
 		}
+
 		sptps_stop(&sptps1);
 		sptps_stop(&sptps2);
 	}
+
 	fprintf(stderr, "%10.2lf op/s\n", rate * 2);
 
 	// SPTPS data
 
 	sptps_start(&sptps1, fd + 0, true, false, key1, key2, "sptps_speed", 11, send_data, receive_record);
 	sptps_start(&sptps2, fd + 1, false, false, key2, key1, "sptps_speed", 11, send_data, receive_record);
+
 	while(poll(pfd, 2, 0)) {
-		if(pfd[0].revents)
+		if(pfd[0].revents) {
 			receive_data(&sptps1);
-		if(pfd[1].revents)
+		}
+
+		if(pfd[1].revents) {
 			receive_data(&sptps2);
+		}
 	}
+
 	fprintf(stderr, "SPTPS/TCP transmit for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);) {
-		if(!sptps_send_record(&sptps1, 0, buf1, 1451))
+		if(!sptps_send_record(&sptps1, 0, buf1, 1451)) {
 			abort();
+		}
+
 		receive_data(&sptps2);
 	}
+
 	rate *= 2 * 1451 * 8;
-	if(rate > 1e9)
+
+	if(rate > 1e9) {
 		fprintf(stderr, "%14.2lf Gbit/s\n", rate / 1e9);
-	else if(rate > 1e6)
+	} else if(rate > 1e6) {
 		fprintf(stderr, "%14.2lf Mbit/s\n", rate / 1e6);
-	else if(rate > 1e3)
+	} else if(rate > 1e3) {
 		fprintf(stderr, "%14.2lf kbit/s\n", rate / 1e3);
+	}
+
 	sptps_stop(&sptps1);
 	sptps_stop(&sptps2);
 
@@ -180,43 +237,62 @@ int main(int argc, char *argv[]) {
 	}
 
 	fprintf(stderr, "SPTPS/UDP authenticate for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);) {
 		sptps_start(&sptps1, fd + 0, true, true, key1, key2, "sptps_speed", 11, send_data, receive_record);
 		sptps_start(&sptps2, fd + 1, false, true, key2, key1, "sptps_speed", 11, send_data, receive_record);
+
 		while(poll(pfd, 2, 0)) {
-			if(pfd[0].revents)
+			if(pfd[0].revents) {
 				receive_data(&sptps1);
-			if(pfd[1].revents)
+			}
+
+			if(pfd[1].revents) {
 				receive_data(&sptps2);
+			}
 		}
+
 		sptps_stop(&sptps1);
 		sptps_stop(&sptps2);
 	}
+
 	fprintf(stderr, "%10.2lf op/s\n", rate * 2);
 
 	// SPTPS datagram data
 
 	sptps_start(&sptps1, fd + 0, true, true, key1, key2, "sptps_speed", 11, send_data, receive_record);
 	sptps_start(&sptps2, fd + 1, false, true, key2, key1, "sptps_speed", 11, send_data, receive_record);
+
 	while(poll(pfd, 2, 0)) {
-		if(pfd[0].revents)
+		if(pfd[0].revents) {
 			receive_data(&sptps1);
-		if(pfd[1].revents)
+		}
+
+		if(pfd[1].revents) {
 			receive_data(&sptps2);
+		}
 	}
+
 	fprintf(stderr, "SPTPS/UDP transmit for %lg seconds: ", duration);
+
 	for(clock_start(); clock_countto(duration);) {
-		if(!sptps_send_record(&sptps1, 0, buf1, 1451))
+		if(!sptps_send_record(&sptps1, 0, buf1, 1451)) {
 			abort();
+		}
+
 		receive_data(&sptps2);
 	}
+
 	rate *= 2 * 1451 * 8;
-	if(rate > 1e9)
+
+	if(rate > 1e9) {
 		fprintf(stderr, "%14.2lf Gbit/s\n", rate / 1e9);
-	else if(rate > 1e6)
+	} else if(rate > 1e6) {
 		fprintf(stderr, "%14.2lf Mbit/s\n", rate / 1e6);
-	else if(rate > 1e3)
+	} else if(rate > 1e3) {
 		fprintf(stderr, "%14.2lf kbit/s\n", rate / 1e3);
+	}
+
 	sptps_stop(&sptps1);
 	sptps_stop(&sptps2);
 

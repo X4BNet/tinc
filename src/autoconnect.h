@@ -1,6 +1,9 @@
+#ifndef TINC_AUTOCONNECT_H
+#define TINC_AUTOCONNECT_H
+
 /*
-    ecdh.c -- Diffie-Hellman key exchange handling
-    Copyright (C) 2011-2013 Guus Sliepen <guus@tinc-vpn.org>
+    autoconnect.h -- header for autoconnect.c
+    Copyright (C) 2017 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,21 +20,6 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "../system.h"
+extern void do_autoconnect(void);
 
-#include "../ecdh.h"
-#include "../logger.h"
-#include "../utils.h"
-#include "../xalloc.h"
-
-ecdh_t *ecdh_generate_public(void *pubkey) {
-	logger(DEBUG_ALWAYS, LOG_ERR, "EC support using libgcrypt not implemented");
-	return NULL;
-}
-
-bool ecdh_compute_shared(ecdh_t *ecdh, const void *pubkey, void *shared) {
-	return false
-}
-
-void ecdh_free(ecdh_t *ecdh) {
-}
+#endif

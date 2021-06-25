@@ -1,3 +1,6 @@
+#ifndef TINC_UTILS_H
+#define TINC_UTILS_H
+
 /*
     utils.h -- header file for utils.c
     Copyright (C) 1999-2005 Ivo Timmermans
@@ -18,15 +21,12 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __TINC_UTILS_H__
-#define __TINC_UTILS_H__
+extern size_t hex2bin(const char *src, void *dst, size_t length);
+extern size_t bin2hex(const void *src, char *dst, size_t length);
 
-extern int hex2bin(const char *src, void *dst, int length);
-extern int bin2hex(const void *src, char *dst, int length);
-
-extern int b64encode(const void *src, char *dst, int length);
-extern int b64encode_urlsafe(const void *src, char *dst, int length);
-extern int b64decode(const char *src, void *dst, int length);
+extern size_t b64encode(const void *src, char *dst, size_t length);
+extern size_t b64encode_urlsafe(const void *src, char *dst, size_t length);
+extern size_t b64decode(const char *src, void *dst, size_t length);
 
 #ifdef HAVE_MINGW
 extern const char *winerror(int);
@@ -50,7 +50,8 @@ extern const char *winerror(int);
 
 extern unsigned int bitfield_to_int(const void *bitfield, size_t size);
 
-extern bool check_id(const char *);
+extern bool check_id(const char *id);
+extern bool check_netname(const char *netname, bool strict);
 char *replace_name(const char *name);
 
-#endif /* __TINC_UTILS_H__ */
+#endif

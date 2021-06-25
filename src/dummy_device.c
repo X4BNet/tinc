@@ -22,12 +22,13 @@
 #include "device.h"
 #include "logger.h"
 #include "net.h"
+#include "xalloc.h"
 
-static char *device_info = "dummy device";
+static const char *device_info = "dummy device";
 
 static bool setup_device(void) {
-	device = "dummy";
-	iface = "dummy";
+	device = xstrdup("dummy");
+	iface = xstrdup("dummy");
 	logger(DEBUG_ALWAYS, LOG_INFO, "%s (%s) is a %s", device, iface, device_info);
 	return true;
 }
@@ -36,10 +37,12 @@ static void close_device(void) {
 }
 
 static bool read_packet(vpn_packet_t *packet) {
+	(void)packet;
 	return false;
 }
 
 static bool write_packet(vpn_packet_t *packet) {
+	(void)packet;
 	return true;
 }
 

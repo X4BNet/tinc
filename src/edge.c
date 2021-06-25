@@ -40,13 +40,15 @@ static int edge_weight_compare(const edge_t *a, const edge_t *b) {
 
 	result = a->weight - b->weight;
 
-	if(result)
+	if(result) {
 		return result;
+	}
 
 	result = strcmp(a->from->name, b->from->name);
 
-	if(result)
+	if(result) {
 		return result;
+	}
 
 	return strcmp(a->to->name, b->to->name);
 }
@@ -75,6 +77,7 @@ edge_t *new_edge(void) {
 
 void free_edge(edge_t *e) {
 	sockaddrfree(&e->address);
+	sockaddrfree(&e->local_address);
 
 	free(e);
 }
@@ -85,13 +88,15 @@ void edge_add(edge_t *e) {
 
 	e->reverse = lookup_edge(e->to, e->from);
 
-	if(e->reverse)
+	if(e->reverse) {
 		e->reverse->reverse = e;
+	}
 }
 
 void edge_del(edge_t *e) {
-	if(e->reverse)
+	if(e->reverse) {
 		e->reverse->reverse = NULL;
+	}
 
 	splay_delete(edge_weight_tree, e);
 	splay_delete(e->from->edge_tree, e);
@@ -110,11 +115,11 @@ bool dump_edges(connection_t *c) {
 	for splay_each(node_t, n, node_tree) {
 		for splay_each(edge_t, e, n->edge_tree) {
 			char *address = sockaddr2hostname(&e->address);
-			char* local_address = sockaddr2hostname(&e->local_address);
+			char *local_address = sockaddr2hostname(&e->local_address);
 			send_request(c, "%d %d %s %s %s %s %x %d",
-					CONTROL, REQ_DUMP_EDGES,
-					e->from->name, e->to->name, address,
-					local_address, e->options, e->weight);
+			             CONTROL, REQ_DUMP_EDGES,
+			             e->from->name, e->to->name, address,
+			             local_address, e->options, e->weight);
 			free(address);
 			free(local_address);
 		}

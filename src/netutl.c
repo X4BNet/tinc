@@ -39,6 +39,9 @@ struct addrinfo *str2addrinfo(const char *address, const char *service, int sock
 	hint.ai_family = addressfamily;
 	hint.ai_socktype = socktype;
 
+#if HAVE_DECL_RES_INIT
+	res_init();
+#endif
 	err = getaddrinfo(address, service, &hint, &ai);
 
 	if(err) {
@@ -51,7 +54,7 @@ struct addrinfo *str2addrinfo(const char *address, const char *service, int sock
 
 sockaddr_t str2sockaddr(const char *address, const char *port) {
 	struct addrinfo *ai, hint = {0};
-	sockaddr_t result = {{0}};
+	sockaddr_t result = {0};
 	int err;
 
 	hint.ai_family = AF_UNSPEC;
@@ -80,15 +83,29 @@ void sockaddr2str(const sockaddr_t *sa, char **addrstr, char **portstr) {
 	char *scopeid;
 	int err;
 
-	if(sa->sa.sa_family == AF_UNKNOWN) {
-		if(addrstr)
+	if(sa->sa.sa_family == AF_UNSPEC) {
+		if(addrstr) {
+			*addrstr = xstrdup("unspec");
+		}
+
+		if(portstr) {
+			*portstr = xstrdup("unspec");
+		}
+
+		return;
+	} else if(sa->sa.sa_family == AF_UNKNOWN) {
+		if(addrstr) {
 			*addrstr = xstrdup(sa->unknown.address);
-		if(portstr)
+		}
+
+		if(portstr) {
 			*portstr = xstrdup(sa->unknown.port);
+		}
+
 		return;
 	}
 
-	err = getnameinfo(&sa->sa, SALEN(sa->sa), address, sizeof address, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV);
+	err = getnameinfo(&sa->sa, SALEN(sa->sa), address, sizeof(address), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
 
 	if(err) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Error while translating addresses: %s", err == EAI_SYSTEM ? strerror(errno) : gai_strerror(err));
@@ -97,13 +114,17 @@ void sockaddr2str(const sockaddr_t *sa, char **addrstr, char **portstr) {
 
 	scopeid = strchr(address, '%');
 
-	if(scopeid)
-		*scopeid = '\0'; /* Descope. */
+	if(scopeid) {
+		*scopeid = '\0';        /* Descope. */
+	}
 
-	if(addrstr)
+	if(addrstr) {
 		*addrstr = xstrdup(address);
-	if(portstr)
+	}
+
+	if(portstr) {
 		*portstr = xstrdup(port);
+	}
 }
 
 char *sockaddr2hostname(const sockaddr_t *sa) {
@@ -112,13 +133,17 @@ char *sockaddr2hostname(const sockaddr_t *sa) {
 	char port[NI_MAXSERV] = "unknown";
 	int err;
 
-	if(sa->sa.sa_family == AF_UNKNOWN) {
+	if(sa->sa.sa_family == AF_UNSPEC) {
+		xasprintf(&str, "unspec port unspec");
+		return str;
+	} else if(sa->sa.sa_family == AF_UNKNOWN) {
 		xasprintf(&str, "%s port %s", sa->unknown.address, sa->unknown.port);
 		return str;
 	}
 
-	err = getnameinfo(&sa->sa, SALEN(sa->sa), address, sizeof address, port, sizeof port,
-					hostnames ? 0 : (NI_NUMERICHOST | NI_NUMERICSERV));
+	err = getnameinfo(&sa->sa, SALEN(sa->sa), address, sizeof(address), port, sizeof(port),
+	                  hostnames ? 0 : (NI_NUMERICHOST | NI_NUMERICSERV));
+
 	if(err) {
 		logger(DEBUG_ALWAYS, LOG_ERR, "Error while looking up hostname: %s", err == EAI_SYSTEM ? strerror(errno) : gai_strerror(err));
 	}
@@ -133,26 +158,27 @@ int sockaddrcmp_noport(const sockaddr_t *a, const sockaddr_t *b) {
 
 	result = a->sa.sa_family - b->sa.sa_family;
 
-	if(result)
+	if(result) {
 		return result;
+	}
 
-	switch (a->sa.sa_family) {
-		case AF_UNSPEC:
-			return 0;
+	switch(a->sa.sa_family) {
+	case AF_UNSPEC:
+		return 0;
 
-		case AF_UNKNOWN:
-			return strcmp(a->unknown.address, b->unknown.address);
+	case AF_UNKNOWN:
+		return strcmp(a->unknown.address, b->unknown.address);
 
-		case AF_INET:
-			return memcmp(&a->in.sin_addr, &b->in.sin_addr, sizeof(a->in.sin_addr));
+	case AF_INET:
+		return memcmp(&a->in.sin_addr, &b->in.sin_addr, sizeof(a->in.sin_addr));
 
-		case AF_INET6:
-			return memcmp(&a->in6.sin6_addr, &b->in6.sin6_addr, sizeof(a->in6.sin6_addr));
+	case AF_INET6:
+		return memcmp(&a->in6.sin6_addr, &b->in6.sin6_addr, sizeof(a->in6.sin6_addr));
 
-		default:
-			logger(DEBUG_ALWAYS, LOG_ERR, "sockaddrcmp() was called with unknown address family %d, exitting!",
-				   a->sa.sa_family);
-			abort();
+	default:
+		logger(DEBUG_ALWAYS, LOG_ERR, "sockaddrcmp() was called with unknown address family %d, exitting!",
+		       a->sa.sa_family);
+		abort();
 	}
 }
 
@@ -161,41 +187,45 @@ int sockaddrcmp(const sockaddr_t *a, const sockaddr_t *b) {
 
 	result = a->sa.sa_family - b->sa.sa_family;
 
-	if(result)
+	if(result) {
 		return result;
+	}
 
-	switch (a->sa.sa_family) {
-		case AF_UNSPEC:
-			return 0;
+	switch(a->sa.sa_family) {
+	case AF_UNSPEC:
+		return 0;
 
-		case AF_UNKNOWN:
-			result = strcmp(a->unknown.address, b->unknown.address);
+	case AF_UNKNOWN:
+		result = strcmp(a->unknown.address, b->unknown.address);
 
-			if(result)
-				return result;
+		if(result) {
+			return result;
+		}
 
-			return strcmp(a->unknown.port, b->unknown.port);
+		return strcmp(a->unknown.port, b->unknown.port);
 
-		case AF_INET:
-			result = memcmp(&a->in.sin_addr, &b->in.sin_addr, sizeof a->in.sin_addr);
+	case AF_INET:
+		result = memcmp(&a->in.sin_addr, &b->in.sin_addr, sizeof(a->in.sin_addr));
 
-			if(result)
-				return result;
+		if(result) {
+			return result;
+		}
 
-			return memcmp(&a->in.sin_port, &b->in.sin_port, sizeof a->in.sin_port);
+		return memcmp(&a->in.sin_port, &b->in.sin_port, sizeof(a->in.sin_port));
 
-		case AF_INET6:
-			result = memcmp(&a->in6.sin6_addr, &b->in6.sin6_addr, sizeof a->in6.sin6_addr);
+	case AF_INET6:
+		result = memcmp(&a->in6.sin6_addr, &b->in6.sin6_addr, sizeof(a->in6.sin6_addr));
 
-			if(result)
-				return result;
+		if(result) {
+			return result;
+		}
 
-			return memcmp(&a->in6.sin6_port, &b->in6.sin6_port, sizeof a->in6.sin6_port);
+		return memcmp(&a->in6.sin6_port, &b->in6.sin6_port, sizeof(a->in6.sin6_port));
 
-		default:
-			logger(DEBUG_ALWAYS, LOG_ERR, "sockaddrcmp() was called with unknown address family %d, exitting!",
-				   a->sa.sa_family);
-			abort();
+	default:
+		logger(DEBUG_ALWAYS, LOG_ERR, "sockaddrcmp() was called with unknown address family %d, exitting!",
+		       a->sa.sa_family);
+		abort();
 	}
 }
 
@@ -220,5 +250,30 @@ void sockaddrunmap(sockaddr_t *sa) {
 	if(sa->sa.sa_family == AF_INET6 && IN6_IS_ADDR_V4MAPPED(&sa->in6.sin6_addr)) {
 		sa->in.sin_addr.s_addr = ((uint32_t *) & sa->in6.sin6_addr)[3];
 		sa->in.sin_family = AF_INET;
+	}
+}
+
+void sockaddr_setport(sockaddr_t *sa, const char *port) {
+	uint16_t portnum = htons(atoi(port));
+
+	if(!portnum) {
+		return;
+	}
+
+	switch(sa->sa.sa_family) {
+	case AF_INET:
+		sa->in.sin_port = portnum;
+		break;
+
+	case AF_INET6:
+		sa->in6.sin6_port = portnum;
+		break;
+
+	case AF_UNKNOWN:
+		free(sa->unknown.port);
+		sa->unknown.port = xstrdup(port);
+
+	default:
+		return;
 	}
 }

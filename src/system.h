@@ -1,7 +1,10 @@
+#ifndef TINC_SYSTEM_H
+#define TINC_SYSTEM_H
+
 /*
     system.h -- system headers
     Copyright (C) 1998-2005 Ivo Timmermans
-                  2003-2013 Guus Sliepen <guus@tinc-vpn.org>
+                  2003-2016 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,18 +21,9 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __TINC_SYSTEM_H__
-#define __TINC_SYSTEM_H__
-
 #include "../config.h"
 
 #include "have.h"
-
-#ifndef HAVE_STDBOOL_H
-typedef int bool;
-#define true 1
-#define false 0
-#endif
 
 #ifndef HAVE_STRSIGNAL
 # define strsignal(p) ""
@@ -39,8 +33,4 @@ typedef int bool;
 
 #include "dropin.h"
 
-#ifndef HAVE_SOCKLEN_T
-typedef int socklen_t;
 #endif
-
-#endif /* __TINC_SYSTEM_H__ */

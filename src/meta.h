@@ -1,6 +1,9 @@
+#ifndef TINC_META_H
+#define TINC_META_H
+
 /*
     meta.h -- header for meta.c
-    Copyright (C) 2000-2012 Guus Sliepen <guus@tinc-vpn.org>,
+    Copyright (C) 2000-2014 Guus Sliepen <guus@tinc-vpn.org>,
                   2000-2005 Ivo Timmermans
 
     This program is free software; you can redistribute it and/or modify
@@ -18,15 +21,13 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __TINC_META_H__
-#define __TINC_META_H__
-
 #include "connection.h"
 
-extern bool send_meta(struct connection_t *, const char *, int);
-extern bool send_meta_sptps(void *, uint8_t, const char *, size_t);
-extern bool receive_meta_sptps(void *, uint8_t, const char *, uint16_t);
-extern void broadcast_meta(struct connection_t *, const char *, int);
-extern bool receive_meta(struct connection_t *);
+extern bool send_meta(struct connection_t *c, const char *buffer, size_t length);
+extern void send_meta_raw(struct connection_t *c, const char *buffer, size_t length);
+extern bool send_meta_sptps(void *handle, uint8_t type, const void *data, size_t length);
+extern bool receive_meta_sptps(void *handle, uint8_t type, const void *data, uint16_t length);
+extern void broadcast_meta(struct connection_t *from, const char *buffer, size_t length);
+extern bool receive_meta(struct connection_t *c);
 
-#endif /* __TINC_META_H__ */
+#endif

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. ./testlib.sh
+. "${0%/*}/testlib.sh"
 
 # Initialize one node
 
@@ -9,7 +9,6 @@ init foo
 set DeviceType dummy
 set Mode switch
 set Broadcast no
-del Port
 set Address localhost
 set Port 32751
 start $r1
@@ -17,14 +16,12 @@ EOF
 
 # Generate an invitation and let another node join the VPN
 
-sleep 1
-
 $tinc $c1 invite bar | $tinc $c2 join
 
 # Test equivalence of host config files
 
 cmp $d1/hosts/foo $d2/hosts/foo
-test "`grep ^ECDSAPublicKey $d1/hosts/bar`" = "`grep ^ECDSAPublicKey $d2/hosts/bar`"
+test "`grep ^Ed25519PublicKey $d1/hosts/bar`" = "`grep ^Ed25519PublicKey $d2/hosts/bar`"
 
 # Test Mode, Broadcast and ConnectTo statements
 

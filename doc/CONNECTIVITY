@@ -1,4 +1,4 @@
-This document describes how nodes in a VPN find and connect to eachother and
+This document describes how nodes in a VPN find and connect to each other and
 maintain a stable network.
 
    Copyright 2001-2006 Guus Sliepen <guus@tinc-vpn.org>
@@ -26,7 +26,7 @@ share the same information. It will also almost completely prevent information
 from looping, because "new" information that is already known is ignored and
 not forwarded any further. However, since information can also be deleted
 there's the possibility of a looping sequence of add/delete messages. This is
-resolved by additionaly adding a unique identifier to each broadcasted message.
+resolved by additionally adding a unique identifier to each broadcasted message.
 Messages are dropped if the same message with that identifier has already been
 seen.
 

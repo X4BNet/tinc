@@ -1,4 +1,4 @@
-.Dd 2014-01-29
+.Dd 2017-09-02
 .Dt TINC.CONF 5
 .\" Manual page created by:
 .\" Ivo Timmermans
@@ -42,7 +42,7 @@ the configuration file should be
 and the host configuration files are now expected to be in
 .Pa @sysconfdir@/tinc/hosts/ .
 .Sh NAMES
-Each tinc daemon should have a name that is unique in the network which it will be part of.
+Each tinc daemon must have a name that is unique in the network which it will be part of.
 The name will be used by other tinc daemons for identification.
 The name has to be declared in the
 .Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /tinc.conf
@@ -114,7 +114,7 @@ If
 .Qq any
 is selected, then depending on the operating system both IPv4 and IPv6 or just
 IPv6 listening sockets will be created.
-.It Va AutoConnect Li = yes | no Po no Pc Bq experimental
+.It Va AutoConnect Li = yes | no Pq yes
 If set to yes,
 .Nm tinc
 will automatically set up meta connections to other nodes,
@@ -177,7 +177,7 @@ line).
 .Pp
 If you don't specify a host with
 .Va ConnectTo
-and don't enable
+and have disabled
 .Va AutoConnect ,
 .Nm tinc
 won't try to connect to other daemons at all,
@@ -234,11 +234,16 @@ Do NOT connect multiple
 .Nm tinc 
 daemons to the same multicast address, this will very likely cause routing loops.
 Also note that this can cause decrypted VPN packets to be sent out on a real network if misconfigured.
+.It fd
+Use a file descriptor, given directly as an integer or passed through a unix domain socket.
+On Linux, an abstract socket address can be specified by using "@" as a prefix.
+All packets are read from this interface.
+Packets received for the local node are written to it.
 .It uml Pq not compiled in by default
 Create a UNIX socket with the filename specified by
 .Va Device ,
 or
-.Pa @localstatedir@/run/ Ns Ar NETNAME Ns Pa .umlsocket
+.Pa @runstatedir@/ Ns Ar NETNAME Ns Pa .umlsocket
 if not specified.
 .Nm tinc
 will wait for a User Mode Linux instance to connect to this socket.
@@ -247,7 +252,7 @@ Uses the libvdeplug library to connect to a Virtual Distributed Ethernet switch,
 using the UNIX socket specified by
 .Va Device ,
 or
-.Pa @localstatedir@/run/vde.ctl
+.Pa @runstatedir@/vde.ctl
 if not specified.
 .El
 Also, in case tinc does not seem to correctly interpret packets received from the virtual network device,
@@ -265,6 +270,10 @@ Set type to tun with an address family header.
 Tinc will expect packets read from the virtual network device
 to start with a four byte header containing the address family,
 followed by an IP header.
+This mode should support both IPv4 and IPv6 packets.
+.It utun Pq OS X
+Set type to utun.
+This is only supported on OS X version 10.6.8 and higher, but doesn't require the tuntaposx module.
 This mode should support both IPv4 and IPv6 packets.
 .It tap Pq BSD and Linux
 Set type to tap.
@@ -298,10 +307,16 @@ Incoming packets that are meant for another node are forwarded by tinc internall
 .Pp
 This is the default mode, and unless you really know you need another forwarding mode, don't change it.
 .It kernel
-Incoming packets are always sent to the TUN/TAP device, even if the packets are not for the local node.
+Incoming packets using the legacy protocol are always sent to the TUN/TAP device,
+even if the packets are not for the local node.
 This is less efficient, but allows the kernel to apply its routing and firewall rules on them,
 and can also help debugging.
+Incoming packets using the SPTPS protocol are dropped, since they are end-to-end encrypted.
 .El
+.It Va FWMark Li = Ar value Po 0 Pc Bq experimental
+When set to a non-zero value, all TCP and UDP sockets created by tinc will use the given value as the firewall mark.
+This can be used for mark-based routing or for packet filtering.
+This option is currently only supported on Linux.
 .It Va Hostnames Li = yes | no Pq no
 This option selects whether IP addresses (both real and on the VPN) should
 be resolved. Since DNS lookups are blocking, it might affect tinc's
@@ -319,6 +334,8 @@ Under Windows, this variable is used to select which network interface will be u
 If you specified a
 .Va Device ,
 this variable is almost always already correctly set.
+.It Va InvitationExpire Li = Ar seconds Pq 604800
+This option controls the period invitations are valid.
 .It Va KeyExpire Li = Ar seconds Pq 3600
 This option controls the period the encryption keys used to encrypt the data are valid.
 It is common practice to change keys at regular intervals to make it even harder for crackers,
@@ -358,7 +375,9 @@ This will allow direct communication using LAN addresses, even if both peers are
 and they only ConnectTo a third node outside the NAT,
 which normally would prevent the peers from learning each other's LAN address.
 .Pp
-Currently, local discovery is implemented by sending some packets to the local address of the node during path MTU discovery. This will not work with old nodes that don't transmit their local address.
+Currently, local discovery is implemented by sending some packets to the local address of the node during UDP discovery. This will not work with old nodes that don't transmit their local address.
+.It Va LogLevel Li = level Pq 0
+This option controls the verbosity of the logging. The higher the debug level, the more messages it will log.
 .It Va MACExpire Li = Ar seconds Pq 600
 This option controls the amount of time MAC addresses are kept before they are removed.
 This only has effect when
@@ -464,10 +483,10 @@ and
 .Ev REMOTEPORT
 are available.
 .El
-.It Va ReplayWindow Li = Ar bytes Pq 16
+.It Va ReplayWindow Li = Ar bytes Pq 32
 This is the size of the replay tracking window for each remote node, in bytes.
 The window is a bitfield which tracks 1 packet per bit, so for example
-the default setting of 16 will track up to 128 packets in the window. In high
+the default setting of 32 will track up to 256 packets in the window. In high
 bandwidth scenarios, setting this to a higher value can reduce packet loss from
 the interaction of replay tracking with underlying real packet loss and/or
 reordering. Setting this to zero will disable replay tracking completely and
@@ -485,12 +504,42 @@ and will only allow connections with nodes for which host config files are prese
 .Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /hosts/
 directory.
 Setting this options also implicitly sets StrictSubnets.
-.It Va UDPRcvBuf Li = Ar bytes Pq OS default
+.It Va UDPDiscovery Li = yes | no Po yes Pc
+When this option is enabled tinc will try to establish UDP connectivity to nodes,
+using TCP while it determines if a node is reachable over UDP. If it is disabled,
+tinc always assumes a node is reachable over UDP.
+Note that tinc will never use UDP with nodes that have
+.Va TCPOnly
+enabled.
+.It Va UDPDiscoveryKeepaliveInterval Li = Ar seconds Pq 9
+The minimum amount of time between sending UDP ping datagrams to check UDP connectivity once it has been established.
+Note that these pings are large, since they are used to verify link MTU as well.
+.It Va UDPDiscoveryInterval Li = Ar seconds Pq 2
+The minimum amount of time between sending UDP ping datagrams to try to establish UDP connectivity.
+.It Va UDPDiscoveryTimeout Li = Ar seconds Pq 30
+If tinc doesn't receive any UDP ping replies over the specified interval,
+it will assume UDP communication is broken and will fall back to TCP.
+.It Va UDPInfoInterval Li = Ar seconds Pq 5
+The minimum amount of time between sending periodic updates about UDP addresses, which are mostly useful for UDP hole punching.
+.It Va UDPRcvBuf Li = Ar bytes Pq 1048576
 Sets the socket receive buffer size for the UDP socket, in bytes.
-If unset, the default buffer size will be used by the operating system.
-.It Va UDPSndBuf Li = Ar bytes Pq OS default
+If set to zero, the default buffer size will be used by the operating system.
+Note: this setting can have a significant impact on performance, especially raw throughput.
+.It Va UDPSndBuf Li = Ar bytes Pq 1048576
 Sets the socket send buffer size for the UDP socket, in bytes.
-If unset, the default buffer size will be used by the operating system.
+If set to zero, the default buffer size will be used by the operating system.
+Note: this setting can have a significant impact on performance, especially raw throughput.
+.It Va UPnP Li = yes | udponly | no Po no Pc
+If this option is enabled then tinc will search for UPnP-IGD devices on the local network.
+It will then create and maintain port mappings for tinc's listening TCP and UDP ports.
+If set to "udponly", tinc will only create a mapping for its UDP (data) port, not for its TCP (metaconnection) port.
+Note that tinc must have been built with miniupnpc support for this feature to be available.
+Furthermore, be advised that enabling this can have security implications, because the miniupnpc library that
+tinc uses might not be well-hardened with regard to malicious UPnP replies.
+.It Va UPnPDiscoverWait Li = Ar seconds Pq 5
+The amount of time to wait for replies when probing the local network for UPnP devices.
+.It Va UPnPRefreshPeriod Li = Ar seconds Pq 60
+How often tinc will re-add the port mapping, in case it gets reset on the UPnP device. This also controls the duration of the port mapping itself, which will be set to twice that duration.
 .El
 .Sh HOST CONFIGURATION FILES
 The host configuration files contain all information needed
@@ -515,7 +564,7 @@ variables can be specified, in which case each address will be tried until a wor
 connection has been established.
 .It Va Cipher Li = Ar cipher Pq blowfish
 The symmetric cipher algorithm used to encrypt UDP packets.
-Any cipher supported by OpenSSL is recognised.
+Any cipher supported by LibreSSL or OpenSSL is recognised.
 Furthermore, specifying
 .Qq none
 will turn off packet encryption.
@@ -532,7 +581,7 @@ Possible values are 0 (off), 1 (fast zlib) and any integer up to 9 (best zlib),
 10 (fast lzo) and 11 (best lzo).
 .It Va Digest Li = Ar digest Pq sha1
 The digest algorithm used to authenticate UDP packets.
-Any digest supported by OpenSSL is recognised.
+Any digest supported by LibreSSL or OpenSSL is recognised.
 Furthermore, specifying
 .Qq none
 will turn off packet authentication.
@@ -554,6 +603,8 @@ This option controls the initial path MTU to this node.
 .It Va PMTUDiscovery Li = yes | no Po yes Pc
 When this option is enabled, tinc will try to discover the path MTU to this node.
 After the path MTU has been discovered, it will be enforced on the VPN.
+.It Va MTUInfoInterval Li = Ar seconds Pq 5
+The minimum amount of time between sending periodic updates about relay path MTU. Useful for quickly determining MTU to indirect nodes.
 .It Va Port Li = Ar port Pq 655
 The port number on which this tinc daemon is listening for incoming connections,
 which is used if no port number is specified in an
@@ -625,10 +676,18 @@ forwarding packets.
 .Sh SCRIPTS
 Apart from reading the server and host configuration files,
 tinc can also run scripts at certain moments.
-Under Windows (not Cygwin), the scripts should have the extension
+Below is a list of filenames of scripts and a description of when they are run.
+A script is only run if it exists and if it is executable.
+.Pp
+Scripts are run synchronously;
+this means that tinc will temporarily stop processing packets until the called script finishes executing.
+This guarantees that scripts will execute in the exact same order as the events that trigger them.
+If you need to run commands asynchronously, you have to ensure yourself that they are being run in the background.
+.Pp
+Under Windows, the scripts must have the extension
 .Pa .bat
 or
-.Pa cmd .
+.Pa .cmd .
 .Bl -tag -width indent
 .It Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /tinc-up
 This is the most important script.
@@ -637,6 +696,7 @@ If it is present it will be executed right after the tinc daemon has been starte
 is used).
 It should be used to set up the corresponding network interface,
 but can also be used to start other things.
+.Pp
 Under Windows you can use the Network Connections control panel instead of creating this script.
 .It Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /tinc-down
 This script is started right before the tinc daemon quits (or when the last node becomes unreachable if
@@ -730,11 +790,15 @@ It can be used to set up the corresponding network interface.
 If an executable file with this name exists,
 it will be executed right before the tinc daemon is going to close
 its connection to the virtual network device.
+.It Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /invitations/
+This directory contains outstanding invitations.
+.It Pa @sysconfdir@/tinc/ Ns Ar NETNAME Ns Pa /invitation-data
+After a successful join, this file contains a copy of the invitation data received.
 .El
 .Sh SEE ALSO
 .Xr tincd 8 ,
 .Xr tinc 8 ,
-.Pa http://www.tinc-vpn.org/ ,
+.Pa https://www.tinc-vpn.org/ ,
 .Pa http://www.tldp.org/LDP/nag2/ .
 .Pp
 The full documentation for

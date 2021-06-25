@@ -1,3 +1,6 @@
+#ifndef TINC_INVITATION_H
+#define TINC_INVITATION_H
+
 /*
     invitation.h -- header for invitation.c.
     Copyright (C) 2013 Guus Sliepen <guus@tinc-vpn.org>
@@ -17,10 +20,6 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __TINC_INVITATION_H__
-#define __TINC_INVITATION_H__
-
-bool recvdata(int fd, char *data, size_t len);
 int cmd_invite(int argc, char *argv[]);
 int cmd_join(int argc, char *argv[]);
 

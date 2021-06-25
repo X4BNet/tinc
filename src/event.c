@@ -1,6 +1,6 @@
 /*
     event.c -- I/O, timeout and signal event handling
-    Copyright (C) 2012-2013 Guus Sliepen <guus@tinc-vpn.org>
+    Copyright (C) 2012-2018 Guus Sliepen <guus@tinc-vpn.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -42,25 +42,47 @@ static int io_compare(const io_t *a, const io_t *b) {
 #ifndef HAVE_MINGW
 	return a->fd - b->fd;
 #else
-	return a->event - b->event;
+
+	if(a->event < b->event) {
+		return -1;
+	}
+
+	if(a->event > b->event) {
+		return 1;
+	}
+
+	return 0;
 #endif
 }
 
 static int timeout_compare(const timeout_t *a, const timeout_t *b) {
 	struct timeval diff;
 	timersub(&a->tv, &b->tv, &diff);
-	if(diff.tv_sec < 0)
+
+	if(diff.tv_sec < 0) {
 		return -1;
-	if(diff.tv_sec > 0)
+	}
+
+	if(diff.tv_sec > 0) {
 		return 1;
-	if(diff.tv_usec < 0)
+	}
+
+	if(diff.tv_usec < 0) {
 		return -1;
-	if(diff.tv_usec > 0)
+	}
+
+	if(diff.tv_usec > 0) {
 		return 1;
-	if(a < b)
+	}
+
+	if(a < b) {
 		return -1;
-	if(a > b)
+	}
+
+	if(a > b) {
 		return 1;
+	}
+
 	return 0;
 }
 
@@ -68,16 +90,21 @@ static splay_tree_t io_tree = {.compare = (splay_compare_t)io_compare};
 static splay_tree_t timeout_tree = {.compare = (splay_compare_t)timeout_compare};
 
 void io_add(io_t *io, io_cb_t cb, void *data, int fd, int flags) {
-	if(io->cb)
+	if(io->cb) {
 		return;
+	}
 
 	io->fd = fd;
 #ifdef HAVE_MINGW
-	if (io->fd != -1) {
+
+	if(io->fd != -1) {
 		io->event = WSACreateEvent();
-		if (io->event == WSA_INVALID_EVENT)
+
+		if(io->event == WSA_INVALID_EVENT) {
 			abort();
+		}
 	}
+
 	event_count++;
 #endif
 	io->cb = cb;
@@ -86,8 +113,9 @@ void io_add(io_t *io, io_cb_t cb, void *data, int fd, int flags) {
 
 	io_set(io, flags);
 
-	if(!splay_insert_node(&io_tree, &io->node))
+	if(!splay_insert_node(&io_tree, &io->node)) {
 		abort();
+	}
 }
 
 #ifdef HAVE_MINGW
@@ -101,9 +129,13 @@ void io_set(io_t *io, int flags) {
     if (!epollset) epollset = epoll_create1(0);
 	if (flags == io->flags)
 		return;
+	}
+
 	io->flags = flags;
-	if (io->fd == -1)
+
+	if(io->fd == -1) {
 		return;
+	}
 
 #ifndef HAVE_MINGW
     struct epoll_event ev;
@@ -131,23 +163,34 @@ void io_set(io_t *io, int flags) {
     }
 #else
 	long events = 0;
-	if (flags & IO_WRITE)
+
+	if(flags & IO_WRITE) {
 		events |= WRITE_EVENTS;
-	if (flags & IO_READ)
+	}
+
+	if(flags & IO_READ) {
 		events |= READ_EVENTS;
-	if (WSAEventSelect(io->fd, io->event, events) != 0)
+	}
+
+	if(WSAEventSelect(io->fd, io->event, events) != 0) {
 		abort();
+	}
+
 #endif
 }
 
 void io_del(io_t *io) {
-	if(!io->cb)
+	if(!io->cb) {
 		return;
+	}
 
 	io_set(io, 0);
 #ifdef HAVE_MINGW
-	if (io->fd != -1 && WSACloseEvent(io->event) == FALSE)
+
+	if(io->fd != -1 && WSACloseEvent(io->event) == FALSE) {
 		abort();
+	}
+
 	event_count--;
 #endif
 
@@ -164,25 +207,31 @@ void timeout_add(timeout_t *timeout, timeout_cb_t cb, void *data, struct timeval
 }
 
 void timeout_set(timeout_t *timeout, struct timeval *tv) {
-	if(timerisset(&timeout->tv))
+	if(timerisset(&timeout->tv)) {
 		splay_unlink_node(&timeout_tree, &timeout->node);
+	}
 
-	if(!now.tv_sec)
+	if(!now.tv_sec) {
 		gettimeofday(&now, NULL);
+	}
 
 	timeradd(&now, tv, &timeout->tv);
 
-	if(!splay_insert_node(&timeout_tree, &timeout->node))
+	if(!splay_insert_node(&timeout_tree, &timeout->node)) {
 		abort();
+	}
 }
 
 void timeout_del(timeout_t *timeout) {
-	if(!timeout->cb)
+	if(!timeout->cb) {
 		return;
+	}
 
 	splay_unlink_node(&timeout_tree, &timeout->node);
 	timeout->cb = 0;
-	timeout->tv = (struct timeval){0, 0};
+	timeout->tv = (struct timeval) {
+		0, 0
+	};
 }
 
 #ifndef HAVE_MINGW
@@ -200,41 +249,54 @@ static void signal_handler(int signum) {
 }
 
 static void signalio_handler(void *data, int flags) {
+	(void)data;
+	(void)flags;
 	unsigned char signum;
-	if(read(pipefd[0], &signum, 1) != 1)
-		return;
 
-	signal_t *sig = splay_search(&signal_tree, &((signal_t){.signum = signum}));
-	if(sig)
+	if(read(pipefd[0], &signum, 1) != 1) {
+		return;
+	}
+
+	signal_t *sig = splay_search(&signal_tree, &((signal_t) {
+		.signum = signum
+	}));
+
+	if(sig) {
 		sig->cb(sig->data);
+	}
 }
 
 static void pipe_init(void) {
-	if(!pipe(pipefd))
+	if(!pipe(pipefd)) {
 		io_add(&signalio, signalio_handler, NULL, pipefd[0], IO_READ);
+	}
 }
 
 void signal_add(signal_t *sig, signal_cb_t cb, void *data, int signum) {
-	if(sig->cb)
+	if(sig->cb) {
 		return;
+	}
 
 	sig->cb = cb;
 	sig->data = data;
 	sig->signum = signum;
 	sig->node.data = sig;
 
-	if(pipefd[0] == -1)
+	if(pipefd[0] == -1) {
 		pipe_init();
+	}
 
 	signal(sig->signum, signal_handler);
 
-	if(!splay_insert_node(&signal_tree, &sig->node))
+	if(!splay_insert_node(&signal_tree, &sig->node)) {
 		abort();
+	}
 }
 
 void signal_del(signal_t *sig) {
-	if(!sig->cb)
+	if(!sig->cb) {
 		return;
+	}
 
 	signal(sig->signum, SIG_DFL);
 
@@ -243,7 +305,7 @@ void signal_del(signal_t *sig) {
 }
 #endif
 
-static struct timeval * get_time_remaining(struct timeval *diff) {
+static struct timeval *get_time_remaining(struct timeval *diff) {
 	gettimeofday(&now, NULL);
 	struct timeval *tv = NULL;
 
@@ -253,8 +315,10 @@ static struct timeval * get_time_remaining(struct timeval *diff) {
 
 		if(diff->tv_sec < 0) {
 			timeout->cb(timeout->data);
-			if(timercmp(&timeout->tv, &now, <))
+
+			if(timercmp(&timeout->tv, &now, <)) {
 				timeout_del(timeout);
+			}
 		} else {
 			tv = diff;
 			break;
@@ -286,14 +350,18 @@ bool event_loop(void) {
         int n = epoll_wait(epollset, events, maxfds, tv->tv_sec * 1000 + tv->tv_usec / 1000);
 
 		if(n < 0) {
-			if(sockwouldblock(sockerrno))
+			if(sockwouldblock(sockerrno)) {
 				continue;
-			else
+			} else {
 				return false;
+			}
 		}
 
-		if(!n)
+		if(!n) {
 			continue;
+		}
+
+		unsigned int curgen = io_tree.generation;
 
         // ANNOT: splay tree?  maybe there is something to do with the data structures
 		for splay_each(io_t, io, &io_tree) {
@@ -306,17 +374,29 @@ bool event_loop(void) {
                     if (events[i].events & EPOLLOUT) {
 				        io->cb(io->data, IO_WRITE);
                     }
+
+					/*
+					There are scenarios in which the callback will remove another io_t from the tree
+					(e.g. closing a double connection). Since splay_each does not support that, we
+					need to exit the loop if that happens. That's okay, since any remaining events will
+					get picked up by the next select() call.
+					*/
+					if(curgen != io_tree.generation) {
+						break;
+					}
                 }
             }
 		}
 	}
+
 #else
-	while (running) {
+
+	while(running) {
 		struct timeval diff;
 		struct timeval *tv = get_time_remaining(&diff);
-		DWORD timeout_ms = tv ? (tv->tv_sec * 1000 + tv->tv_usec / 1000 + 1) : WSA_INFINITE;
+		DWORD timeout_ms = tv ? (DWORD)(tv->tv_sec * 1000 + tv->tv_usec / 1000 + 1) : WSA_INFINITE;
 
-		if (!event_count) {
+		if(!event_count) {
 			Sleep(timeout_ms);
 			continue;
 		}
@@ -331,51 +411,90 @@ bool event_loop(void) {
 		   Note that technically FD_CLOSE has the same problem, but it's okay because user code does not rely on
 		   this event being fired again if ignored.
 		*/
-		io_t* writeable_io = NULL;
-		for splay_each(io_t, io, &io_tree)
-			if (io->flags & IO_WRITE && send(io->fd, NULL, 0, 0) == 0) {
-				writeable_io = io;
-				break;
+		unsigned int curgen = io_tree.generation;
+
+		for splay_each(io_t, io, &io_tree) {
+			if(io->flags & IO_WRITE && send(io->fd, NULL, 0, 0) == 0) {
+				io->cb(io->data, IO_WRITE);
+
+				if(curgen != io_tree.generation) {
+					break;
+				}
 			}
-		if (writeable_io) {
-			writeable_io->cb(writeable_io->data, IO_WRITE);
-			continue;
 		}
 
-		WSAEVENT* events = xmalloc(event_count * sizeof(*events));
+		if(event_count > WSA_MAXIMUM_WAIT_EVENTS) {
+			WSASetLastError(WSA_INVALID_PARAMETER);
+			return(false);
+		}
+
+		WSAEVENT events[WSA_MAXIMUM_WAIT_EVENTS];
+		io_t *io_map[WSA_MAXIMUM_WAIT_EVENTS];
 		DWORD event_index = 0;
+
 		for splay_each(io_t, io, &io_tree) {
 			events[event_index] = io->event;
+			io_map[event_index] = io;
 			event_index++;
 		}
 
-		DWORD result = WSAWaitForMultipleEvents(event_count, events, FALSE, timeout_ms, FALSE);
+		/*
+		 * If the generation number changes due to event addition
+		 * or removal by a callback we restart the loop.
+		 */
+		curgen = io_tree.generation;
 
-		WSAEVENT event;
-		if (result >= WSA_WAIT_EVENT_0 && result < WSA_WAIT_EVENT_0 + event_count)
-			event = events[result - WSA_WAIT_EVENT_0];
-		free(events);
-		if (result == WSA_WAIT_TIMEOUT)
-			continue;
-		if (result < WSA_WAIT_EVENT_0 || result >= WSA_WAIT_EVENT_0 + event_count)
-			return false;
+		for(DWORD event_offset = 0; event_offset < event_count;) {
+			DWORD result = WSAWaitForMultipleEvents(event_count - event_offset, &events[event_offset], FALSE, timeout_ms, FALSE);
 
-		io_t *io = splay_search(&io_tree, &((io_t){.event = event}));
-		if (!io)
-			abort();
+			if(result == WSA_WAIT_TIMEOUT) {
+				break;
+			}
 
-		if (io->fd == -1) {
-			io->cb(io->data, 0);
-		} else {
-			WSANETWORKEVENTS network_events;
-			if (WSAEnumNetworkEvents(io->fd, io->event, &network_events) != 0)
-				return false;
-			if (network_events.lNetworkEvents & WRITE_EVENTS)
-				io->cb(io->data, IO_WRITE);
-			if (network_events.lNetworkEvents & READ_EVENTS)
-				io->cb(io->data, IO_READ);
+			if(result >= event_count - event_offset) {
+				return(false);
+			}
+
+			/* Look up io in the map by index. */
+			event_index = result - event_offset;
+			io_t *io = io_map[event_index];
+
+			if(io->fd == -1) {
+				io->cb(io->data, 0);
+
+				if(curgen != io_tree.generation) {
+					break;
+				}
+			} else {
+				WSANETWORKEVENTS network_events;
+
+				if(WSAEnumNetworkEvents(io->fd, io->event, &network_events) != 0) {
+					return(false);
+				}
+
+				if(network_events.lNetworkEvents & READ_EVENTS) {
+					io->cb(io->data, IO_READ);
+
+					if(curgen != io_tree.generation) {
+						break;
+					}
+				}
+
+				/*
+				    The fd might be available for write too. However, if we already fired the read callback, that
+				    callback might have deleted the io (e.g. through terminate_connection()), so we can't fire the
+				    write callback here. Instead, we loop back and let the writable io loop above handle it.
+				 */
+			}
+
+			/* Continue checking the rest of the events. */
+			event_offset = event_index + 1;
+
+			/* Just poll the next time through. */
+			timeout_ms = 0;
 		}
 	}
+
 #endif
 
 	return true;

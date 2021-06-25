@@ -1,6 +1,6 @@
 /*
     subnet.c -- handle subnet lookups and lists
-    Copyright (C) 2000-2013 Guus Sliepen <guus@tinc-vpn.org>,
+    Copyright (C) 2000-2017 Guus Sliepen <guus@tinc-vpn.org>,
                   2000-2005 Ivo Timmermans
 
     This program is free software; you can redistribute it and/or modify
@@ -40,9 +40,9 @@ splay_tree_t *subnet_tree;
 
 /* Subnet lookup cache */
 
-hash_t *ipv4_cache;
-hash_t *ipv6_cache;
-hash_t *mac_cache;
+static hash_t *ipv4_cache;
+static hash_t *ipv6_cache;
+static hash_t *mac_cache;
 
 void subnet_cache_flush(void) {
 	hash_clear(ipv4_cache);
@@ -92,15 +92,19 @@ void subnet_add(node_t *n, subnet_t *subnet) {
 	subnet->owner = n;
 
 	splay_insert(subnet_tree, subnet);
-	if (n)
+
+	if(n) {
 		splay_insert(n->subnet_tree, subnet);
+	}
 
 	subnet_cache_flush();
 }
 
 void subnet_del(node_t *n, subnet_t *subnet) {
-	if (n)
+	if(n) {
 		splay_delete(n->subnet_tree, subnet);
+	}
+
 	splay_delete(subnet_tree, subnet);
 
 	subnet_cache_flush();
@@ -117,26 +121,31 @@ subnet_t *lookup_subnet_mac(const node_t *owner, const mac_t *address) {
 
 	// Check if this address is cached
 
-	if((r = hash_search(mac_cache, address)))
+	if((r = hash_search(mac_cache, address))) {
 		return r;
+	}
 
 	// Search all subnets for a matching one
 
 	for splay_each(subnet_t, p, owner ? owner->subnet_tree : subnet_tree) {
-		if(!p || p->type != SUBNET_MAC)
+		if(!p || p->type != SUBNET_MAC) {
 			continue;
+		}
 
-		if(!memcmp(address, &p->net.mac.address, sizeof *address)) {
+		if(!memcmp(address, &p->net.mac.address, sizeof(*address))) {
 			r = p;
-			if(!p->owner || p->owner->status.reachable)
+
+			if(!p->owner || p->owner->status.reachable) {
 				break;
+			}
 		}
 	}
 
 	// Cache the result
 
-	if(r)
+	if(r) {
 		hash_insert(mac_cache, address, r);
+	}
 
 	return r;
 }
@@ -146,26 +155,31 @@ subnet_t *lookup_subnet_ipv4(const ipv4_t *address) {
 
 	// Check if this address is cached
 
-	if((r = hash_search(ipv4_cache, address)))
+	if((r = hash_search(ipv4_cache, address))) {
 		return r;
+	}
 
 	// Search all subnets for a matching one
 
 	for splay_each(subnet_t, p, subnet_tree) {
-		if(!p || p->type != SUBNET_IPV4)
+		if(!p || p->type != SUBNET_IPV4) {
 			continue;
+		}
 
 		if(!maskcmp(address, &p->net.ipv4.address, p->net.ipv4.prefixlength)) {
 			r = p;
-			if(!p->owner || p->owner->status.reachable)
+
+			if(!p->owner || p->owner->status.reachable) {
 				break;
+			}
 		}
 	}
 
 	// Cache the result
 
-	if(r)
+	if(r) {
 		hash_insert(ipv4_cache, address, r);
+	}
 
 	return r;
 }
@@ -175,26 +189,31 @@ subnet_t *lookup_subnet_ipv6(const ipv6_t *address) {
 
 	// Check if this address is cached
 
-	if((r = hash_search(ipv6_cache, address)))
+	if((r = hash_search(ipv6_cache, address))) {
 		return r;
+	}
 
 	// Search all subnets for a matching one
 
 	for splay_each(subnet_t, p, subnet_tree) {
-		if(!p || p->type != SUBNET_IPV6)
+		if(!p || p->type != SUBNET_IPV6) {
 			continue;
+		}
 
 		if(!maskcmp(address, &p->net.ipv6.address, p->net.ipv6.prefixlength)) {
 			r = p;
-			if(!p->owner || p->owner->status.reachable)
+
+			if(!p->owner || p->owner->status.reachable) {
 				break;
+			}
 		}
 	}
 
 	// Cache the result
 
-	if(r)
+	if(r) {
 		hash_insert(ipv6_cache, address, r);
+	}
 
 	return r;
 }
@@ -206,78 +225,77 @@ void subnet_update(node_t *owner, subnet_t *subnet, bool up) {
 
 	// Prepare environment variables to be passed to the script
 
-	char *envp[10] = {NULL};
-	xasprintf(&envp[0], "NETNAME=%s", netname ? : "");
-	xasprintf(&envp[1], "DEVICE=%s", device ? : "");
-	xasprintf(&envp[2], "INTERFACE=%s", iface ? : "");
-	xasprintf(&envp[3], "NODE=%s", owner->name);
+	environment_t env;
+	environment_init(&env);
+	environment_add(&env, "NODE=%s", owner->name);
 
 	if(owner != myself) {
 		sockaddr2str(&owner->address, &address, &port);
-		// 4 and 5 are reserved for SUBNET and WEIGHT
-		xasprintf(&envp[6], "REMOTEADDRESS=%s", address);
-		xasprintf(&envp[7], "REMOTEPORT=%s", port);
+		environment_add(&env, "REMOTEADDRESS=%s", address);
+		environment_add(&env, "REMOTEPORT=%s", port);
 		free(port);
 		free(address);
 	}
 
-	xasprintf(&envp[8], "NAME=%s", myself->name);
+	int env_subnet = environment_add(&env, NULL);
+	int env_weight = environment_add(&env, NULL);
 
 	name = up ? "subnet-up" : "subnet-down";
 
 	if(!subnet) {
 		for splay_each(subnet_t, subnet, owner->subnet_tree) {
-			if(!net2str(netstr, sizeof netstr, subnet))
+			if(!net2str(netstr, sizeof(netstr), subnet)) {
 				continue;
+			}
 
 			// Strip the weight from the subnet, and put it in its own environment variable
 			char *weight = strchr(netstr, '#');
-			if(weight)
+
+			if(weight) {
 				*weight++ = 0;
-			else
+			} else {
 				weight = empty;
+			}
 
 			// Prepare the SUBNET and WEIGHT variables
-			if(envp[4])
-				free(envp[4]);
-			if(envp[5])
-				free(envp[5]);
-			xasprintf(&envp[4], "SUBNET=%s", netstr);
-			xasprintf(&envp[5], "WEIGHT=%s", weight);
+			environment_update(&env, env_subnet, "SUBNET=%s", netstr);
+			environment_update(&env, env_weight, "WEIGHT=%s", weight);
 
-			execute_script(name, envp);
+			execute_script(name, &env);
 		}
 	} else {
-		if(net2str(netstr, sizeof netstr, subnet)) {
+		if(net2str(netstr, sizeof(netstr), subnet)) {
 			// Strip the weight from the subnet, and put it in its own environment variable
 			char *weight = strchr(netstr, '#');
-			if(weight)
+
+			if(weight) {
 				*weight++ = 0;
-			else
+			} else {
 				weight = empty;
+			}
 
 			// Prepare the SUBNET and WEIGHT variables
-			xasprintf(&envp[4], "SUBNET=%s", netstr);
-			xasprintf(&envp[5], "WEIGHT=%s", weight);
+			environment_update(&env, env_subnet, "SUBNET=%s", netstr);
+			environment_update(&env, env_weight, "WEIGHT=%s", weight);
 
-			execute_script(name, envp);
+			execute_script(name, &env);
 		}
 	}
 
-	for(int i = 0; envp[i] && i < 9; i++)
-		free(envp[i]);
+	environment_exit(&env);
 }
 
 bool dump_subnets(connection_t *c) {
 	for splay_each(subnet_t, subnet, subnet_tree) {
 		char netstr[MAXNETSTR];
 
-		if(!net2str(netstr, sizeof netstr, subnet))
+		if(!net2str(netstr, sizeof(netstr), subnet)) {
 			continue;
+		}
 
 		send_request(c, "%d %d %s %s",
-				CONTROL, REQ_DUMP_SUBNETS,
-				netstr, subnet->owner ? subnet->owner->name : "(broadcast)");
+		             CONTROL, REQ_DUMP_SUBNETS,
+		             netstr, subnet->owner ? subnet->owner->name : "(broadcast)");
 	}
 
 	return send_request(c, "%d %d", CONTROL, REQ_DUMP_SUBNETS);
