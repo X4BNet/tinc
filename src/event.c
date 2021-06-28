@@ -424,12 +424,10 @@ bool event_loop(void) {
 #ifdef HAVE_EPOLL_CTL
             for (int i = 0; i < n; i++) {
                 if (events[i].data.fd == io->fd) {
-                    if (events[i].events & EPOLLIN) {
-				        io->cb(io->data, IO_READ);
-                    }
-
                     if (events[i].events & EPOLLOUT) {
 				        io->cb(io->data, IO_WRITE);
+                    } else if (events[i].events & EPOLLIN) {
+				        io->cb(io->data, IO_READ);
                     }
 
 					break;
