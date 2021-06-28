@@ -172,7 +172,7 @@ sptps_keypair_SOURCES += \
 endif
 
 if LINUX
-tincd_SOURCES += linux/device.c
+tincd_SOURCES += linux/device.c linux/vhost.c
 endif
 
 if BSD

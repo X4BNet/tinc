@@ -25,6 +25,8 @@
 #include "cipher.h"
 #include "digest.h"
 #include "event.h"
+#include <linux/virtio_net.h>
+
 
 #define EPOL_MAX_EVENTS_PER_LOOP 64
 
@@ -94,6 +96,12 @@ typedef struct vpn_packet_t {
 	length_t len;           /* The actual number of valid bytes in the `data' field (including seqno or dstid/srcid) */
 	length_t offset;        /* Offset in the buffer where the packet data starts (righter after seqno or dstid/srcid) */
 	int priority;           /* priority or TOS */
+	union {
+		struct {
+			unsigned char pad[12];
+			struct virtio_net_hdr_mrg_rxbuf h;
+		} virtio;
+	};
 	uint8_t data[MAXSIZE];
 } vpn_packet_t;
 

@@ -217,6 +217,7 @@ static bool write_packet(vpn_packet_t *packet) {
 		abort();
 	}
 
+	// NOTE: return value is ignored
 	return true;
 }
 
