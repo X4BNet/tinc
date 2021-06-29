@@ -69,7 +69,7 @@ hash_t* hash_alloc_ ## t (size_t n) { \
 } \
 void hash_insert_ ## t (hash_t *hash, const void *key, const void *value) { \
 	uint32_t i = modulo(hash_function ## t(key), hash->n); \
-	memcpy(hash->keys + i * hash->size, key, sizeof(#t)); \
+	memcpy(hash->keys + i * sizeof(#t), key, sizeof(#t)); \
 	hash->values[i] = value; \
 } \
 void *hash_search_ ## t (const hash_t *hash, const void *key) { \
@@ -84,7 +84,7 @@ void *hash_search_or_insert_ ## t (hash_t *hash, const void *key, const void *va
 	if(hash->values[i] && !memcmp(key, hash->keys + i * sizeof(#t), sizeof(#t))) { \
 		return (void *)hash->values[i]; \
 	} \
-	memcpy(hash->keys + i * hash->size, key, sizeof(#t)); \
+	memcpy(hash->keys + i * sizeof(#t), key, sizeof(#t)); \
 	hash->values[i] = value; \
 	return NULL; \
 } \
