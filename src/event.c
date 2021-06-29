@@ -341,7 +341,7 @@ static struct timeval *timeout_execute(struct timeval *diff) {
 		timeout_t *timeout = timeout_tree.head->data;
 		timersub(&timeout->tv, &now, diff);
 
-		if(diff->tv_sec < 0) {
+		if(diff->tv_sec <= 0) {
 			timeout->cb(timeout->data);
 
 			if(timercmp(&timeout->tv, &now, <=)) {
@@ -396,7 +396,7 @@ bool event_loop(void) {
 
 #ifdef HAVE_SYS_EPOLL_H
         struct epoll_event events[maxfds];
-        int timeout = tv->tv_sec * 1000 + (tv->tv_usec / 1000);
+        int timeout = (tv->tv_sec * 1000) + (tv->tv_usec / 1000);
         int n = epoll_wait(epollset, events, maxfds, timeout);
 #else
 		int n = select(maxfds, &readable, &writable, NULL, tv);
