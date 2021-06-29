@@ -82,3 +82,5 @@ void *hash_search_ ## t (const hash_t *hash, const void *key) { \
 
 
 #define hash_alloc(n, t) hash_alloc_ ## t ((n))
+
+#endif

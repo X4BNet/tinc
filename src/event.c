@@ -20,7 +20,7 @@
 #include "system.h"
 #include "dropin.h"
 
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
 #include <sys/epoll.h>
 #endif
 
@@ -35,7 +35,7 @@ struct timeval now;
 
 #ifndef HAVE_MINGW
 
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
 static int epollset = 0;
 #else
 static fd_set readfds;
@@ -137,7 +137,7 @@ void io_add_event(io_t *io, io_cb_t cb, void *data, WSAEVENT event) {
 #endif
 
 void io_set(io_t *io, int flags) {
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
     if (!epollset) epollset = epoll_create1(0);
 #endif
 
@@ -152,7 +152,7 @@ void io_set(io_t *io, int flags) {
 	}
 
 #ifndef HAVE_MINGW
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
     struct epoll_event ev;
     ev.data.fd = io->fd;
 
@@ -361,7 +361,7 @@ bool event_loop(void) {
 
 #ifndef HAVE_MINGW
 
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
     if (!epollset) epollset = epoll_create1(0);
 #else
 	fd_set readable;
@@ -371,7 +371,7 @@ bool event_loop(void) {
 	while(running) {
 		struct timeval diff;
 		struct timeval *tv = get_time_remaining(&diff);
-#ifndef HAVE_EPOLL_CTL
+#ifndef HAVE_SYS_EPOLL_H
 		memcpy(&readable, &readfds, sizeof(readable));
 		memcpy(&writable, &writefds, sizeof(writable));
 #endif
@@ -394,7 +394,7 @@ bool event_loop(void) {
 		}
 
 
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
         struct epoll_event events[maxfds];
         int timeout = tv->tv_sec * 1000 + tv->tv_usec / 1000;
         if (timeout == 0 && tv->tv_usec > 0) timeout = 1;
@@ -421,7 +421,7 @@ bool event_loop(void) {
 		//     we should be able to use the epoll_event epoll_data_t (data member)
 		//     instead
 		for splay_each(io_t, io, &io_tree) {
-#ifdef HAVE_EPOLL_CTL
+#ifdef HAVE_SYS_EPOLL_H
             for (int i = 0; i < n; i++) {
                 if (events[i].data.fd == io->fd) {
                     if (events[i].events & EPOLLOUT) {
