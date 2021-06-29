@@ -173,7 +173,7 @@ AC_CHECK_HEADERS([syslog.h sys/file.h sys/ioctl.h sys/mman.h sys/param.h sys/res
 AC_CHECK_HEADERS([net/if.h net/if_types.h net/ethernet.h net/if_arp.h netinet/in_systm.h netinet/in.h netinet/in6.h netpacket/packet.h],
   [], [], [#include "$srcdir/src/have.h"]
 )
-AC_CHECK_HEADERS([netinet/if_ether.h netinet/ip.h netinet/ip6.h resolv.h],
+AC_CHECK_HEADERS([netinet/if_ether.h netinet/ip.h netinet/ip6.h resolv.h sys/epoll.h],
   [], [], [#include "$srcdir/src/have.h"]
 )
 AC_CHECK_HEADERS([netinet/tcp.h netinet/ip_icmp.h netinet/icmp6.h],
@@ -191,7 +191,7 @@ AC_CHECK_TYPES([struct ether_header, struct arphdr, struct ether_arp, struct ip,
 
 dnl Checks for library functions.
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS([asprintf daemon fchmod flock fork gettimeofday mlockall epoll_ctl putenv recvmmsg strsignal nanosleep unsetenv vsyslog devname fdevname],
+AC_CHECK_FUNCS([asprintf daemon fchmod flock fork gettimeofday mlockall putenv recvmmsg strsignal nanosleep unsetenv vsyslog devname fdevname],
   [], [], [#include "$srcdir/src/have.h"]
 )
 
