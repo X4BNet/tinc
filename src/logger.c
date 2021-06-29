@@ -40,59 +40,62 @@ static const char *logident = NULL;
 bool logcontrol = false;
 int umbilical = 0;
 
+static bool should_log(int level){
+	// Bail out early if there is nothing to do.
+
+	if(!logcontrol && (level > debug_level || logmode == LOGMODE_NULL)) {
+		return false;
+	}
+
+	return (level > debug_level);
+}
+
 static void real_logger(int level, int priority, const char *message) {
 	char timestr[32] = "";
 	static bool suppress = false;
 
-	// Bail out early if there is nothing to do.
 	if(suppress) {
 		return;
 	}
+	
+	switch(logmode) {
+	case LOGMODE_STDERR:
+		fprintf(stderr, "%s\n", message);
+		fflush(stderr);
+		break;
 
-	if(!logcontrol && (level > debug_level || logmode == LOGMODE_NULL)) {
-		return;
-	}
+	case LOGMODE_FILE:
+		if(!now.tv_sec) {
+			gettimeofday(&now, NULL);
+		}
 
-	if(level <= debug_level) {
-		switch(logmode) {
-		case LOGMODE_STDERR:
-			fprintf(stderr, "%s\n", message);
-			fflush(stderr);
-			break;
+		time_t now_sec = now.tv_sec;
+		strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_sec));
+		fprintf(logfile, "%s %s[%ld]: %s\n", timestr, logident, (long)logpid, message);
+		fflush(logfile);
+		break;
 
-		case LOGMODE_FILE:
-			if(!now.tv_sec) {
-				gettimeofday(&now, NULL);
-			}
-
-			time_t now_sec = now.tv_sec;
-			strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", localtime(&now_sec));
-			fprintf(logfile, "%s %s[%ld]: %s\n", timestr, logident, (long)logpid, message);
-			fflush(logfile);
-			break;
-
-		case LOGMODE_SYSLOG:
+	case LOGMODE_SYSLOG:
 #ifdef HAVE_MINGW
-			{
-				const char *messages[] = {message};
-				ReportEvent(loghandle, priority, 0, 0, NULL, 1, 0, messages, NULL);
-			}
+		{
+			const char *messages[] = {message};
+			ReportEvent(loghandle, priority, 0, 0, NULL, 1, 0, messages, NULL);
+		}
 
 #else
 #ifdef HAVE_SYSLOG_H
-			syslog(priority, "%s", message);
+		syslog(priority, "%s", message);
 #endif
 #endif
-			break;
+		break;
 
-		case LOGMODE_NULL:
-			break;
-		}
+	case LOGMODE_NULL:
+		break;
+	}
 
-		if(umbilical && do_detach) {
-			write(umbilical, message, strlen(message));
-			write(umbilical, "\n", 1);
-		}
+	if(umbilical && do_detach) {
+		write(umbilical, message, strlen(message));
+		write(umbilical, "\n", 1);
 	}
 
 	if(logcontrol) {
@@ -125,6 +128,8 @@ void logger(int level, int priority, const char *format, ...) {
 	va_list ap;
 	char message[1024] = "";
 
+	if(!should_log(level)) return;
+
 	va_start(ap, format);
 	int len = vsnprintf(message, sizeof(message), format, ap);
 	message[sizeof(message) - 1] = 0;
@@ -141,6 +146,8 @@ static void sptps_logger(sptps_t *s, int s_errno, const char *format, va_list ap
 	(void)s_errno;
 	char message[1024];
 	size_t msglen = sizeof(message);
+
+	if(!should_log(DEBUG_ALWAYS)) return;
 
 	int len = vsnprintf(message, msglen, format, ap);
 	message[sizeof(message) - 1] = 0;
