@@ -344,7 +344,7 @@ static struct timeval *timeout_execute(struct timeval *diff) {
 		if(diff->tv_sec < 0 || (diff->tv_sec == 0 && diff->tv_usec <= 0)) {
 			timeout->cb(timeout->data);
 
-			if(timercmp(&timeout->tv, &now, <=)) {
+			if(!timercmp(&timeout->tv, &now, >)) {
 				timeout_del(timeout);
 			}
 		} else {
