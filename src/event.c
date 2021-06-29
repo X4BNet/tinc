@@ -333,7 +333,7 @@ void signal_del(signal_t *sig) {
 }
 #endif
 
-static struct timeval *get_time_remaining(struct timeval *diff) {
+static struct timeval *timeout_execute(struct timeval *diff) {
 	gettimeofday(&now, NULL);
 	struct timeval *tv = NULL;
 
@@ -344,7 +344,7 @@ static struct timeval *get_time_remaining(struct timeval *diff) {
 		if(diff->tv_sec < 0) {
 			timeout->cb(timeout->data);
 
-			if(timercmp(&timeout->tv, &now, <)) {
+			if(timercmp(&timeout->tv, &now, <=)) {
 				timeout_del(timeout);
 			}
 		} else {
@@ -353,7 +353,7 @@ static struct timeval *get_time_remaining(struct timeval *diff) {
 		}
 	}
 
-	return tv;
+	return tv; // returns the next time
 }
 
 bool event_loop(void) {
@@ -370,7 +370,7 @@ bool event_loop(void) {
 	
 	while(running) {
 		struct timeval diff;
-		struct timeval *tv = get_time_remaining(&diff);
+		struct timeval *tv = timeout_execute(&diff);
 #ifndef HAVE_SYS_EPOLL_H
 		memcpy(&readable, &readfds, sizeof(readable));
 		memcpy(&writable, &writefds, sizeof(writable));
@@ -396,9 +396,8 @@ bool event_loop(void) {
 
 #ifdef HAVE_SYS_EPOLL_H
         struct epoll_event events[maxfds];
-        int timeout = tv->tv_sec * 1000 + tv->tv_usec / 1000;
-        if (timeout == 0 && tv->tv_usec > 0) timeout = 1;
-        int n = epoll_wait(epollset, events, maxfds, tv->tv_sec * 1000 + tv->tv_usec / 1000);
+        int timeout = tv->tv_sec * 1000 + (tv->tv_usec / 1000);
+        int n = epoll_wait(epollset, events, maxfds, timeout);
 #else
 		int n = select(maxfds, &readable, &writable, NULL, tv);
 #endif
@@ -458,7 +457,7 @@ bool event_loop(void) {
 
 	while(running) {
 		struct timeval diff;
-		struct timeval *tv = get_time_remaining(&diff);
+		struct timeval *tv = timeout_execute(&diff);
 		DWORD timeout_ms = tv ? (DWORD)(tv->tv_sec * 1000 + tv->tv_usec / 1000 + 1) : WSA_INFINITE;
 
 		if(!event_count) {
