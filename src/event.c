@@ -49,6 +49,17 @@ static DWORD event_count = 0;
 #endif
 static bool running;
 
+#ifdef HAVE_SYS_EPOLL_H
+static inline int event_epoll_init(){
+	/* NOTE: 1024 limit is only used on ancient (pre 2.6.27) kernels.
+		Decent kernels will ignore this value making it unlimited.
+		epoll_create1 might be better, but these kernels would not be supported
+		in that case.
+	*/
+	return epoll_create(1024);
+}
+#endif
+
 static int io_compare(const io_t *a, const io_t *b) {
 #ifndef HAVE_MINGW
 	return a->fd - b->fd;
@@ -138,7 +149,7 @@ void io_add_event(io_t *io, io_cb_t cb, void *data, WSAEVENT event) {
 
 void io_set(io_t *io, int flags) {
 #ifdef HAVE_SYS_EPOLL_H
-    if (!epollset) epollset = epoll_create1(0);
+    if (!epollset) epollset = event_epoll_init();
 #endif
 
 	if (flags == io->flags){
@@ -362,7 +373,7 @@ bool event_loop(void) {
 #ifndef HAVE_MINGW
 
 #ifdef HAVE_SYS_EPOLL_H
-    if (!epollset) epollset = epoll_create1(0);
+    if (!epollset) epollset = event_epoll_init();
 #else
 	fd_set readable;
 	fd_set writable;
