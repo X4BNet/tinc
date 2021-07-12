@@ -121,13 +121,14 @@ int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
 }
 
 bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt) {
+	unsigned char iv[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_set_key(cipher->chacha, key);
 
 	case SPTPS_CIPHER_AES:
 		//key[0] &= 0x7F;
-		return cipher_set_key_from_rsa(cipher->legcipher, key, sptps_cipher_keylength(cipher->cipher), encrypt);
+		return cipher_set_key(cipher->legcipher, key, iv, encrypt);
 	}
 
 	return false;
@@ -651,7 +652,7 @@ static bool sptps_receive_data_datagram(sptps_t *s, const char *data, size_t len
 	// Decrypt
 
 	char buffer[len];
-	size_t outlen;
+	size_t outlen = MAXSIZE;
 
 	if(!sptps_cipher_decrypt(&s->incipher, seqno, data, len, buffer, &outlen)) {
 		return error(s, EIO, "Failed to decrypt and verify packet");
@@ -683,7 +684,7 @@ static bool sptps_receive_data_datagram(sptps_t *s, const char *data, size_t len
 			return false;
 		}
 	} else {
-		return error(s, EIO, "Invalid record type %d", type);
+		return error(s, EIO, "Invalid datagram record type %d during", type);
 	}
 
 	return true;

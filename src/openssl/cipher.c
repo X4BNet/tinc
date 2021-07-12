@@ -110,13 +110,15 @@ size_t cipher_blocksize(const cipher_t *cipher) {
 	return EVP_CIPHER_block_size(cipher->cipher);
 }
 
-bool cipher_set_key(cipher_t *cipher, void *key, bool encrypt) {
+bool cipher_set_key(cipher_t *cipher, void *key, unsigned char * iv, bool encrypt) {
 	bool result;
 
+	if(iv == NULL) iv = (unsigned char *)key + EVP_CIPHER_key_length(cipher->cipher);
+
 	if(encrypt) {
-		result = EVP_EncryptInit_ex(cipher->ctx, cipher->cipher, NULL, (unsigned char *)key, (unsigned char *)key + EVP_CIPHER_key_length(cipher->cipher));
+		result = EVP_EncryptInit_ex(cipher->ctx, cipher->cipher, NULL, (unsigned char *)key, iv);
 	} else {
-		result = EVP_DecryptInit_ex(cipher->ctx, cipher->cipher, NULL, (unsigned char *)key, (unsigned char *)key + EVP_CIPHER_key_length(cipher->cipher));
+		result = EVP_DecryptInit_ex(cipher->ctx, cipher->cipher, NULL, (unsigned char *)key, iv);
 	}
 
 	if(result) {

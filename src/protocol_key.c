@@ -347,7 +347,7 @@ bool send_ans_key(node_t *to) {
 			abort();
 		}
 
-		if(!cipher_set_key(to->incipher, key, false)) {
+		if(!cipher_set_key(to->incipher, key, NULL, false)) {
 			abort();
 		}
 	}
@@ -542,7 +542,7 @@ bool ans_key_h(connection_t *c, const char *request) {
 
 	/* Update our copy of the origin's packet key */
 
-	if(from->outcipher && !cipher_set_key(from->outcipher, key, true)) {
+	if(from->outcipher && !cipher_set_key(from->outcipher, key, NULL, true)) {
 		return false;
 	}
 

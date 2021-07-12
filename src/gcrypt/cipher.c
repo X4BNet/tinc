@@ -158,11 +158,13 @@ void cipher_get_key(const cipher_t *cipher, void *key) {
 	memcpy(key, cipher->key, cipher->keylen + cipher->blklen);
 }
 
-bool cipher_set_key(cipher_t *cipher, void *key, bool encrypt) {
+bool cipher_set_key(cipher_t *cipher, void *key, unsigned char* iv, bool encrypt) {
 	memcpy(cipher->key, key, cipher->keylen + cipher->blklen);
 
+	if(iv == NULL) iv = cipher->key + cipher->keylen;
+
 	gcry_cipher_setkey(cipher->handle, cipher->key, cipher->keylen);
-	gcry_cipher_setiv(cipher->handle, cipher->key + cipher->keylen, cipher->blklen);
+	gcry_cipher_setiv(cipher->handle, iv, cipher->blklen);
 
 	return true;
 }
