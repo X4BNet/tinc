@@ -91,22 +91,16 @@ static void warning(sptps_t *s, const char *format, ...) {
 }
 
 
-void sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
+bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
 	cipher->cipher = ciphertype;
 
 	switch(ciphertype) {
 	case SPTPS_CIPHER_CHACHA:
 		cipher->chacha = chacha_poly1305_init();
-		break;
-	}
-}
-
-bool sptps_cipher_ready(sptps_cipher_t *cipher) {
-	switch(cipher->cipher) {
-	case SPTPS_CIPHER_CHACHA:
 		return cipher->chacha != NULL;
-		break;
 	}
+
+	return false
 }
 
 int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
@@ -267,15 +261,16 @@ static bool send_sig(sptps_t *s) {
 
 // Generate key material from the shared secret created from the ECDHE key exchange.
 static bool generate_key_material(sptps_t *s, const char *shared, size_t len) {
+	bool ready;
 	s->keylength = sptps_cipher_keylength(SPTPS_CIPHER_CHACHA);
 
 	// Initialise cipher and digest structures if necessary
 	if(!s->outstate) {
-		sptps_cipher_init(&s->incipher, SPTPS_CIPHER_CHACHA);
-		sptps_cipher_init(&s->outcipher, SPTPS_CIPHER_CHACHA);
+		ready = sptps_cipher_init(&s->incipher, SPTPS_CIPHER_CHACHA);
+		ready = sptps_cipher_init(&s->outcipher, SPTPS_CIPHER_CHACHA) && ready;
 
-		if(!sptps_cipher_ready(&s->incipher) || !sptps_cipher_ready(&s->outcipher)) {
-			return error(s, EINVAL, "Failed to open cipher");
+		if(!ready) {
+			return error(s, EINVAL, "Failed to open ciphers");
 		}
 	}
 
