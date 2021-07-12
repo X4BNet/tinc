@@ -10,11 +10,11 @@ $tinc $c1 set Port 0
 
 # Test running in the foreground
 
-(sleep 1; $tinc $c1 stop) &
+(sleep 3; $tinc $c1 stop) &
 $tinc $c1 start $r1 -D
 
 # Test running tinc in the background
 
 $tinc $c1 start $r1
-sleep 1
+sleep 3
 $tinc $c1 stop

@@ -67,28 +67,28 @@ add Subnet fec0::/64#5
 start $r2
 EOF
 
-sleep 1
+sleep 3
 
 echo bar-started >>$OUT
 
 $tinc $c1 debug 4
 $tinc $c2 stop
 
-sleep 1
+sleep 3
 
 echo bar-stopped >>$OUT
 
 $tinc $c1 debug 5
 $tinc $c2 start $r2
 
-sleep 1
+sleep 3
 
 echo bar-started >>$OUT
 
 # Stop server node
 
 $tinc $c1 stop
-sleep 1
+sleep 3
 $tinc $c2 stop
 
 # Check if the script output is what is expected

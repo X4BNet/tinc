@@ -14,7 +14,7 @@ EOF
 
 # Generate an invitation and let another node join the VPN
 
-sleep 1
+sleep 3
 
 cat >$d1/invitation-created <<EOF
 #!/bin/sh

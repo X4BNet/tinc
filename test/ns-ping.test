@@ -51,7 +51,7 @@ $tinc $c1 export | $tinc $c2 exchange | $tinc $c1 import
 $tinc $c1 start $r1
 $tinc $c2 start $r2
 
-sleep 1
+sleep 3
 
 # The nodes should not be able to ping each other if there is no connection
 
@@ -60,7 +60,7 @@ ip netns exec ping.test1 ping -W1 -c3 192.168.1.2 && exit 1
 # After connecting they should be
 
 $tinc $c2 add ConnectTo foo
-sleep 1
+sleep 3
 
 ip netns exec ping.test1 ping -W1 -c3 192.168.1.2
 
