@@ -25,6 +25,7 @@
 #include "chacha-poly1305/chacha-poly1305.h"
 #include "ecdh.h"
 #include "ecdsa.h"
+#include "cipher.h"
 
 #define SPTPS_VERSION 0
 
@@ -47,8 +48,8 @@ typedef bool (*receive_record_t)(void *handle, uint8_t type, const void *data, u
 
 typedef enum sptps_cipher_type {
 	SPTPS_CIPHER_CHACHA,
-	//SPTPS_CIPHER_AES,
-	SPTPS_CIPHER_TYPES
+	SPTPS_CIPHER_AES,
+	//SPTPS_CIPHER_TYPES
 } sptps_cipher_type_t;
 
 typedef struct sptps_cipher {
@@ -56,6 +57,7 @@ typedef struct sptps_cipher {
 
 	union {
 		chacha_poly1305_ctx_t *chacha;
+		cipher_t *legcipher;             /* Cipher he will use to send data to us */
 	};
 } sptps_cipher_t;
 
