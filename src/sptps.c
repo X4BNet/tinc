@@ -26,6 +26,7 @@
 #include "ecdsa.h"
 #include "logger.h"
 #include "prf.h"
+#include "net.h"
 #include "sptps.h"
 
 unsigned int sptps_replaywin = 16;
