@@ -103,7 +103,7 @@ typedef struct sptps {
 
 bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype);
 int sptps_cipher_keylength(sptps_cipher_type_t ciphertype);
-bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key);
+bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt);
 void sptps_cipher_exit(sptps_cipher_t *cipher);
 bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen);
 bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen);

@@ -120,14 +120,14 @@ int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
 	return 0;
 }
 
-bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key) {
+bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt) {
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_set_key(cipher->chacha, key);
 
 	case SPTPS_CIPHER_AES:
 		//key[0] &= 0x7F;
-		return cipher_set_key_from_rsa(cipher->legcipher, key, sptps_cipher_keylength(cipher->cipher), true);
+		return cipher_set_key_from_rsa(cipher->legcipher, key, sptps_cipher_keylength(cipher->cipher), encrypt);
 	}
 
 	return false;
@@ -353,11 +353,11 @@ static bool receive_ack(sptps_t *s, const char *data, uint16_t len) {
 	}
 
 	if(s->initiator) {
-		if(!sptps_cipher_set_key(&s->incipher, s->key)) {
+		if(!sptps_cipher_set_key(&s->incipher, s->key, false)) {
 			return error(s, EINVAL, "Failed to set counter");
 		}
 	} else {
-		if(!sptps_cipher_set_key(&s->incipher, s->key + sptps_cipher_keylength(s->incipher.cipher))) {
+		if(!sptps_cipher_set_key(&s->incipher, s->key + sptps_cipher_keylength(s->incipher.cipher), false)) {
 			return error(s, EINVAL, "Failed to set counter");
 		}
 	}
@@ -452,11 +452,11 @@ static bool receive_sig(sptps_t *s, const char *data, uint16_t len) {
 
 	// TODO: only set new keys after ACK has been set/received
 	if(s->initiator) {
-		if(!sptps_cipher_set_key(&s->outcipher, s->key + sptps_cipher_keylength(s->outcipher.cipher))) {
+		if(!sptps_cipher_set_key(&s->outcipher, s->key + sptps_cipher_keylength(s->outcipher.cipher), true)) {
 			return error(s, EINVAL, "Failed to set key");
 		}
 	} else {
-		if(!sptps_cipher_set_key(&s->outcipher, s->key)) {
+		if(!sptps_cipher_set_key(&s->outcipher, s->key, true)) {
 			return error(s, EINVAL, "Failed to set key");
 		}
 	}
