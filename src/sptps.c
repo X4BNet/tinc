@@ -98,6 +98,7 @@ bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
 	case SPTPS_CIPHER_CHACHA:
 		cipher->chacha = chacha_poly1305_init();
 		return cipher->chacha != NULL;
+
 	case SPTPS_CIPHER_AES:
 		cipher->legcipher = cipher_open_by_name("aes-128-cfb");
 		return cipher->legcipher != NULL;
@@ -110,6 +111,7 @@ int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
 	switch(ciphertype) {
 	case SPTPS_CIPHER_CHACHA:
 		return CHACHA_POLY1305_KEYLEN;
+
 	case SPTPS_CIPHER_AES:
 		return 16;
 	}
@@ -121,6 +123,7 @@ bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key) {
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_set_key(cipher->chacha, key);
+
 	case SPTPS_CIPHER_AES:
 		key[0] &= 0x7F;
 		return cipher_set_key_from_rsa(cipher->legcipher, key, sptps_cipher_keylength(cipher->cipher), true);
@@ -134,6 +137,7 @@ void sptps_cipher_exit(sptps_cipher_t *cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		chacha_poly1305_exit(cipher->chacha);
 		break;
+
 	case SPTPS_CIPHER_AES:
 		cipher_close(cipher->legcipher);
 		break;
@@ -144,6 +148,7 @@ bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *in
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
+
 	case SPTPS_CIPHER_AES:
 		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, false);
 		break;
@@ -156,6 +161,7 @@ bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vi
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
+
 	case SPTPS_CIPHER_AES:
 		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, false);
 		break;
