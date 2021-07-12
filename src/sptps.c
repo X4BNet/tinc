@@ -150,7 +150,7 @@ bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *in
 		return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
 
 	case SPTPS_CIPHER_AES:
-		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, false);
+		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true);
 		break;
 	}
 
@@ -163,7 +163,7 @@ bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vi
 		return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
 
 	case SPTPS_CIPHER_AES:
-		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, false);
+		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, true);
 		break;
 	}
 
