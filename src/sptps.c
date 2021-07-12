@@ -145,26 +145,36 @@ void sptps_cipher_exit(sptps_cipher_t *cipher) {
 }
 
 bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen) {
+	size_t _outlen = MAXSIZE;
+
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
 
 	case SPTPS_CIPHER_AES:
-		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true);
-		break;
+		if(!outlen) {
+			outlen = &_outlen;
+		}
+
+		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true) && *outlen == inlen;
 	}
 
 	return false;
 }
 
 bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen) {
+	size_t _outlen = MAXSIZE;
+
 	switch(cipher->cipher) {
 	case SPTPS_CIPHER_CHACHA:
 		return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
 
 	case SPTPS_CIPHER_AES:
-		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, true);
-		break;
+		if(!outlen) {
+			outlen = &_outlen;
+		}
+
+		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, true) && *outlen == inlen;
 	}
 
 	return false;
