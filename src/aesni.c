@@ -40,6 +40,7 @@ bool aesni_is_available() {
 	}
 
 	struct CPUIDinfo info;
+
 	cpuid_info(&info, 1, 0);
 
 	static const unsigned int AESNI_FLAG = (1 << 25);

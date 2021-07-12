@@ -91,59 +91,63 @@ static void warning(sptps_t *s, const char *format, ...) {
 }
 
 
-void sptps_cipher_init(sptps_cipher_t* cipher, sptps_cipher_type_t ciphertype) {
+void sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
 	cipher->cipher = ciphertype;
-	switch(ciphertype){
-		case SPTPS_CIPHER_CHACHA:
-			cipher->chacha = chacha_poly1305_init();
+
+	switch(ciphertype) {
+	case SPTPS_CIPHER_CHACHA:
+		cipher->chacha = chacha_poly1305_init();
 		break;
 	}
 }
 
-bool sptps_cipher_ready(sptps_cipher_t* cipher){
-	switch(cipher->cipher){
-		case SPTPS_CIPHER_CHACHA:
-			return cipher->chacha != NULL;
+bool sptps_cipher_ready(sptps_cipher_t *cipher) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return cipher->chacha != NULL;
 		break;
 	}
 }
 
 int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
-	switch(ciphertype){
-		case SPTPS_CIPHER_CHACHA:
-			return CHACHA_POLY1305_KEYLEN;
+	switch(ciphertype) {
+	case SPTPS_CIPHER_CHACHA:
+		return CHACHA_POLY1305_KEYLEN;
 	}
 }
 
-bool sptps_cipher_set_key(sptps_cipher_t* cipher, char* key) {
-	switch(cipher->cipher){
-		case SPTPS_CIPHER_CHACHA:
-			return chacha_poly1305_set_key(cipher->chacha, key);
+bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_set_key(cipher->chacha, key);
 	}
+
 	return false;
 }
 
-void sptps_cipher_exit(sptps_cipher_t* cipher){
-	switch(cipher->cipher){
-		case SPTPS_CIPHER_CHACHA:
-			chacha_poly1305_exit(cipher->chacha);
-			break;
+void sptps_cipher_exit(sptps_cipher_t *cipher) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		chacha_poly1305_exit(cipher->chacha);
+		break;
 	}
 }
 
-bool sptps_cipher_encrypt(sptps_cipher_t* cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen){
-	switch(cipher->cipher){
-		case SPTPS_CIPHER_CHACHA:
-			return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
+bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
 	}
+
 	return false;
 }
 
-bool sptps_cipher_decrypt(sptps_cipher_t* cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen){
-	switch(cipher->cipher){
-		case SPTPS_CIPHER_CHACHA:
-			return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
+bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
 	}
+
 	return false;
 }
 
