@@ -48,7 +48,7 @@ typedef bool (*receive_record_t)(void *handle, uint8_t type, const void *data, u
 typedef enum sptps_cipher_type {
 	SPTPS_CIPHER_CHACHA,
 	//SPTPS_CIPHER_AES,
-	//SPTPS_CIPHER_TYPES
+	SPTPS_CIPHER_TYPES
 } sptps_cipher_type_t;
 
 typedef struct sptps_cipher {
