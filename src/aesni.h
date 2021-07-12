@@ -1,0 +1,1 @@
+bool aesni_is_available();

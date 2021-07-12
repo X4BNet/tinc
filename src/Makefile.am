@@ -198,6 +198,9 @@ if VDE
 tincd_SOURCES += vde_device.c
 endif
 
+tincd_SOURCES += \
+	aesni.c aesni.h
+	
 if OPENSSL
 tincd_SOURCES += \
 	openssl/cipher.c \
