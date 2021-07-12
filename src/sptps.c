@@ -126,7 +126,7 @@ bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key) {
 		return chacha_poly1305_set_key(cipher->chacha, key);
 
 	case SPTPS_CIPHER_AES:
-		key[0] &= 0x7F;
+		//key[0] &= 0x7F;
 		return cipher_set_key_from_rsa(cipher->legcipher, key, sptps_cipher_keylength(cipher->cipher), true);
 	}
 
