@@ -13,11 +13,11 @@ struct CPUIDinfo {
 };
 
 static void cpuid_info(struct CPUIDinfo *info, unsigned int func, unsigned int subfunc) {
-	__asm__ __volatile__(
+	/*__asm__ __volatile__(
 	        "cpuid"
 	        : "=a"(info->EAX), "=b"(info->EBX), "=c"(info->ECX), "=d"(info->EDX)
 	        : "a"(func), "c"(subfunc)
-	);
+	);*/
 }
 
 bool aesni_has_intel() {
