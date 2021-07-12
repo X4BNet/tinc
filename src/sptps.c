@@ -100,7 +100,7 @@ bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
 		return cipher->chacha != NULL;
 	}
 
-	return false
+	return false;
 }
 
 int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
@@ -108,6 +108,8 @@ int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
 	case SPTPS_CIPHER_CHACHA:
 		return CHACHA_POLY1305_KEYLEN;
 	}
+
+	return 0;
 }
 
 bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key) {
