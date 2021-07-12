@@ -287,12 +287,11 @@ static bool send_sig(sptps_t *s) {
 // Generate key material from the shared secret created from the ECDHE key exchange.
 static bool generate_key_material(sptps_t *s, const char *shared, size_t len) {
 	bool ready;
-	s->keylength = sptps_cipher_keylength(SPTPS_CIPHER_CHACHA);
 
 	// Initialise cipher and digest structures if necessary
 	if(!s->outstate) {
-		ready = sptps_cipher_init(&s->incipher, SPTPS_CIPHER_CHACHA);
-		ready = sptps_cipher_init(&s->outcipher, SPTPS_CIPHER_CHACHA) && ready;
+		ready = sptps_cipher_init(&s->incipher, SPTPS_DEFAULT_CIPHER);
+		ready = sptps_cipher_init(&s->outcipher, SPTPS_DEFAULT_CIPHER) && ready;
 
 		if(!ready) {
 			return error(s, EINVAL, "Failed to open ciphers");
@@ -300,7 +299,7 @@ static bool generate_key_material(sptps_t *s, const char *shared, size_t len) {
 	}
 
 	// Allocate memory for key material
-	size_t keylen = 2 * s->keylength;
+	size_t keylen = 2 * sptps_cipher_keylength(s->incipher.cipher);
 	s->key = realloc(s->key, keylen);
 
 	if(!s->key) {
@@ -347,7 +346,7 @@ static bool receive_ack(sptps_t *s, const char *data, uint16_t len) {
 			return error(s, EINVAL, "Failed to set counter");
 		}
 	} else {
-		if(!sptps_cipher_set_key(&s->incipher, s->key + s->keylength)) {
+		if(!sptps_cipher_set_key(&s->incipher, s->key + sptps_cipher_keylength(s->incipher.cipher))) {
 			return error(s, EINVAL, "Failed to set counter");
 		}
 	}
@@ -442,7 +441,7 @@ static bool receive_sig(sptps_t *s, const char *data, uint16_t len) {
 
 	// TODO: only set new keys after ACK has been set/received
 	if(s->initiator) {
-		if(!sptps_cipher_set_key(&s->outcipher, s->key + s->keylength)) {
+		if(!sptps_cipher_set_key(&s->outcipher, s->key + sptps_cipher_keylength(s->outcipher.cipher))) {
 			return error(s, EINVAL, "Failed to set key");
 		}
 	} else {
