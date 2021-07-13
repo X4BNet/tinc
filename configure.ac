@@ -236,11 +236,9 @@ tinc_READLINE
 tinc_ZLIB
 tinc_LZO
 
-AS_IF([test "x$enable_legacy_protocol" != "xno"],
-      [AS_IF([test -n "$with_libgcrypt"],
-	     [gcrypt=true; tinc_LIBGCRYPT],
-	     [openssl=true; tinc_OPENSSL])
-      ]
+AS_IF([test -n "$with_libgcrypt"],
+  [gcrypt=true; tinc_LIBGCRYPT],
+  [openssl=true; tinc_OPENSSL]
 )
 
 AM_CONDITIONAL(OPENSSL, test -n "$openssl")

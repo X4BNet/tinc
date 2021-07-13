@@ -26,6 +26,7 @@
 #include "ecdsa.h"
 #include "logger.h"
 #include "prf.h"
+#include "net.h"
 #include "sptps.h"
 
 unsigned int sptps_replaywin = 16;
@@ -90,51 +91,160 @@ static void warning(sptps_t *s, const char *format, ...) {
 	va_end(ap);
 }
 
+
+bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype) {
+	cipher->cipher = ciphertype;
+
+	switch(ciphertype) {
+	case SPTPS_CIPHER_CHACHA:
+		cipher->chacha = chacha_poly1305_init();
+		return cipher->chacha != NULL;
+
+	case SPTPS_CIPHER_AES:
+		cipher->legcipher = cipher_open_by_name("aes-128-cfb");
+		return cipher->legcipher != NULL;
+	}
+
+	return false;
+}
+
+int sptps_cipher_keylength(sptps_cipher_type_t ciphertype) {
+	switch(ciphertype) {
+	case SPTPS_CIPHER_CHACHA:
+		return CHACHA_POLY1305_KEYLEN;
+
+	case SPTPS_CIPHER_AES:
+		return 16 + 8; // 16 key, 8 IV
+	}
+
+	return 0;
+}
+
+bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_set_key(cipher->chacha, key);
+
+	case SPTPS_CIPHER_AES:
+		return cipher_set_key(cipher->legcipher, key, (unsigned char *)key + 16, encrypt);
+	}
+
+	return false;
+}
+
+void sptps_cipher_exit(sptps_cipher_t *cipher) {
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		chacha_poly1305_exit(cipher->chacha);
+		break;
+
+	case SPTPS_CIPHER_AES:
+		cipher_close(cipher->legcipher);
+		break;
+	}
+}
+
+bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen) {
+	size_t _outlen = MAXSIZE;
+
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_encrypt(cipher->chacha, seqnr, indata, inlen, voutdata, outlen);
+
+	case SPTPS_CIPHER_AES:
+		if(!outlen) {
+			outlen = &_outlen;
+		}
+
+		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true);
+	}
+
+	return false;
+}
+
+bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen) {
+	size_t _outlen = MAXSIZE;
+
+	switch(cipher->cipher) {
+	case SPTPS_CIPHER_CHACHA:
+		return chacha_poly1305_decrypt(cipher->chacha, seqnr, vindata, inlen, outdata, outlen);
+
+	case SPTPS_CIPHER_AES:
+		if(!outlen) {
+			outlen = &_outlen;
+		}
+
+		return cipher_decrypt(cipher->legcipher, vindata, inlen, outdata, outlen, true) && *outlen == inlen;
+	}
+
+	return false;
+}
+
 // Send a record (datagram version, accepts all record types, handles encryption and authentication).
 static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
-	char buffer[len + 21UL];
+	size_t outlen = len + 21UL;  // + 4 (seqnum), +1 (type), + up to 16 block padding / polly checksum
+	char buffer[outlen];
 
 	// Create header with sequence number, length and record type
 	uint32_t seqno = s->outseqno++;
 	uint32_t netseqno = ntohl(seqno);
 
 	memcpy(buffer, &netseqno, 4);
-	buffer[4] = type;
+	buffer[4] = type; // encryption starts here
 	memcpy(buffer + 5, data, len);
 
 	if(s->outstate) {
 		// If first handshake has finished, encrypt and HMAC
-		chacha_poly1305_encrypt(s->outcipher, seqno, buffer + 4, len + 1, buffer + 4, NULL);
-		return s->send_data(s->handle, type, buffer, len + 21UL);
+		outlen -= 4UL;
+
+		if(!sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 4, len + 1, buffer + 4, &outlen)) {
+			return error(s, EINVAL, "Failed to encrypt datagram");
+		};
+
+		return s->send_data(s->handle, type, buffer, outlen + 4UL);
 	} else {
 		// Otherwise send as plaintext
 		return s->send_data(s->handle, type, buffer, len + 5UL);
 	}
 }
+
+
 // Send a record (private version, accepts all record types, handles encryption and authentication).
+static bool send_record_priv_record(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
+	size_t outlen = len + 19UL;  // + 2 (netlen), +1 (type), + up to 16 block padding / polly checksum
+	char buffer[len + 19UL];
+
+	// Create header with sequence number, length and record type
+	uint16_t netlen = htons(len);
+
+	memcpy(buffer, &netlen, 2);
+	buffer[2] = type; // encryption starts here
+	memcpy(buffer + 3, data, len);
+
+	uint32_t seqno = s->outseqno++; // seqnum to be encrypted
+
+	if(s->outstate) {
+		// If first handshake has finished, encrypt and HMAC
+		outlen -= 2UL;
+
+		if(!sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 2, len + 1, buffer + 2, &outlen)) {
+			return error(s, EINVAL, "Failed to encrypt record");
+		}
+
+		return s->send_data(s->handle, type, buffer, outlen + 2UL);
+	} else {
+		// Otherwise send as plaintext
+		return s->send_data(s->handle, type, buffer, len + 3UL);
+	}
+}
+
+
 static bool send_record_priv(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
 	if(s->datagram) {
 		return send_record_priv_datagram(s, type, data, len);
 	}
 
-	char buffer[len + 19UL];
-
-	// Create header with sequence number, length and record type
-	uint32_t seqno = s->outseqno++;
-	uint16_t netlen = htons(len);
-
-	memcpy(buffer, &netlen, 2);
-	buffer[2] = type;
-	memcpy(buffer + 3, data, len);
-
-	if(s->outstate) {
-		// If first handshake has finished, encrypt and HMAC
-		chacha_poly1305_encrypt(s->outcipher, seqno, buffer + 2, len + 1, buffer + 2, NULL);
-		return s->send_data(s->handle, type, buffer, len + 19UL);
-	} else {
-		// Otherwise send as plaintext
-		return s->send_data(s->handle, type, buffer, len + 3UL);
-	}
+	return send_record_priv_record(s, type, data, len);
 }
 
 // Send an application record.
@@ -206,19 +316,20 @@ static bool send_sig(sptps_t *s) {
 
 // Generate key material from the shared secret created from the ECDHE key exchange.
 static bool generate_key_material(sptps_t *s, const char *shared, size_t len) {
+	bool ready;
+
 	// Initialise cipher and digest structures if necessary
 	if(!s->outstate) {
-		s->incipher = chacha_poly1305_init();
-		s->outcipher = chacha_poly1305_init();
+		ready = sptps_cipher_init(&s->incipher, SPTPS_DEFAULT_CIPHER);
+		ready = sptps_cipher_init(&s->outcipher, SPTPS_DEFAULT_CIPHER) && ready;
 
-		if(!s->incipher || !s->outcipher) {
-			return error(s, EINVAL, "Failed to open cipher");
+		if(!ready) {
+			return error(s, EINVAL, "Failed to open ciphers");
 		}
 	}
 
 	// Allocate memory for key material
-	size_t keylen = 2 * CHACHA_POLY1305_KEYLEN;
-
+	size_t keylen = 2 * sptps_cipher_keylength(s->incipher.cipher);
 	s->key = realloc(s->key, keylen);
 
 	if(!s->key) {
@@ -261,12 +372,12 @@ static bool receive_ack(sptps_t *s, const char *data, uint16_t len) {
 	}
 
 	if(s->initiator) {
-		if(!chacha_poly1305_set_key(s->incipher, s->key)) {
-			return error(s, EINVAL, "Failed to set counter");
+		if(!sptps_cipher_set_key(&s->incipher, s->key, false)) {
+			return error(s, EINVAL, "Failed to set key");
 		}
 	} else {
-		if(!chacha_poly1305_set_key(s->incipher, s->key + CHACHA_POLY1305_KEYLEN)) {
-			return error(s, EINVAL, "Failed to set counter");
+		if(!sptps_cipher_set_key(&s->incipher, s->key + sptps_cipher_keylength(s->incipher.cipher), false)) {
+			return error(s, EINVAL, "Failed to set key");
 		}
 	}
 
@@ -360,11 +471,11 @@ static bool receive_sig(sptps_t *s, const char *data, uint16_t len) {
 
 	// TODO: only set new keys after ACK has been set/received
 	if(s->initiator) {
-		if(!chacha_poly1305_set_key(s->outcipher, s->key + CHACHA_POLY1305_KEYLEN)) {
+		if(!sptps_cipher_set_key(&s->outcipher, s->key + sptps_cipher_keylength(s->outcipher.cipher), true)) {
 			return error(s, EINVAL, "Failed to set key");
 		}
 	} else {
-		if(!chacha_poly1305_set_key(s->outcipher, s->key)) {
+		if(!sptps_cipher_set_key(&s->outcipher, s->key, true)) {
 			return error(s, EINVAL, "Failed to set key");
 		}
 	}
@@ -522,9 +633,11 @@ bool sptps_verify_datagram(sptps_t *s, const void *vdata, size_t len) {
 		return false;
 	}
 
-	char buffer[len];
-	size_t outlen;
-	return chacha_poly1305_decrypt(s->incipher, seqno, data + 4, len - 4, buffer, &outlen);
+	// a bit more than needed but we arent actually going to use this data anyway
+	// we just need to verify the datagram (i.e to identify this datagram as from 1.1)
+	size_t outlen = len - 4;
+	char buffer[outlen];
+	return sptps_cipher_decrypt(&s->incipher, seqno, data + 4, outlen, buffer, &outlen);
 }
 
 // Receive incoming data, datagram version.
@@ -558,10 +671,10 @@ static bool sptps_receive_data_datagram(sptps_t *s, const char *data, size_t len
 
 	// Decrypt
 
-	char buffer[len];
-	size_t outlen;
+	size_t outlen = len;
+	char buffer[outlen];
 
-	if(!chacha_poly1305_decrypt(s->incipher, seqno, data, len, buffer, &outlen)) {
+	if(!sptps_cipher_decrypt(&s->incipher, seqno, data, len, buffer, &outlen)) {
 		return error(s, EIO, "Failed to decrypt and verify packet");
 	}
 
@@ -591,7 +704,7 @@ static bool sptps_receive_data_datagram(sptps_t *s, const char *data, size_t len
 			return false;
 		}
 	} else {
-		return error(s, EIO, "Invalid record type %d", type);
+		return error(s, EIO, "Invalid datagram record type %d during", type);
 	}
 
 	return true;
@@ -670,7 +783,7 @@ size_t sptps_receive_data(sptps_t *s, const void *vdata, size_t len) {
 
 	// Check HMAC and decrypt.
 	if(s->instate) {
-		if(!chacha_poly1305_decrypt(s->incipher, seqno, s->inbuf + 2UL, s->reclen + 17UL, s->inbuf + 2UL, NULL)) {
+		if(!sptps_cipher_decrypt(&s->incipher, seqno, s->inbuf + 2UL, s->reclen + 17UL, s->inbuf + 2UL, NULL)) {
 			return error(s, EINVAL, "Failed to decrypt and verify record");
 		}
 	}
@@ -753,8 +866,8 @@ bool sptps_start(sptps_t *s, void *handle, bool initiator, bool datagram, ecdsa_
 // Stop a SPTPS session.
 bool sptps_stop(sptps_t *s) {
 	// Clean up any resources.
-	chacha_poly1305_exit(s->incipher);
-	chacha_poly1305_exit(s->outcipher);
+	sptps_cipher_exit(&s->incipher);
+	sptps_cipher_exit(&s->outcipher);
 	ecdh_free(s->ecdh);
 	free(s->inbuf);
 	free(s->mykex);

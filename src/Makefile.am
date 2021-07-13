@@ -129,6 +129,7 @@ tinc_SOURCES = \
 
 sptps_test_SOURCES = \
 	logger.c logger.h \
+	cipher.h \
 	sptps.c sptps.h \
 	sptps_test.c \
 	utils.c utils.h \
@@ -213,6 +214,7 @@ tinc_SOURCES += \
 	openssl/rsa.c \
 	openssl/rsagen.c
 sptps_test_SOURCES += \
+	openssl/cipher.c \
 	openssl/crypto.c \
 	openssl/digest.c openssl/digest.h \
 	openssl/prf.c
@@ -248,21 +250,6 @@ sptps_speed_SOURCES += \
 	openssl/crypto.c \
 	openssl/digest.c openssl/digest.h \
 	openssl/prf.c
-else
-tincd_SOURCES += \
-	nolegacy/crypto.c \
-	nolegacy/prf.c
-tinc_SOURCES += \
-	nolegacy/crypto.c \
-	nolegacy/prf.c
-sptps_test_SOURCES += \
-	nolegacy/crypto.c \
-	nolegacy/prf.c
-sptps_keypair_SOURCES += \
-	nolegacy/crypto.c
-sptps_speed_SOURCES += \
-	nolegacy/crypto.c \
-	nolegacy/prf.c
 endif
 endif
 

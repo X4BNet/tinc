@@ -6,6 +6,7 @@
 #include "chacha.h"
 #include "chacha-poly1305.h"
 #include "poly1305.h"
+#include <assert.h>
 
 struct chacha_poly1305_ctx {
 	struct chacha_ctx main_ctx, header_ctx;
@@ -46,6 +47,8 @@ bool chacha_poly1305_encrypt(chacha_poly1305_ctx_t *ctx, uint64_t seqnr, const v
 	uint8_t poly_key[POLY1305_KEYLEN];
 	uint8_t *outdata = voutdata;
 
+	assert(outlen == NULL || inlen <= *outlen + POLY1305_TAGLEN);
+
 	/*
 	 * Run ChaCha20 once to generate the Poly1305 key. The IV is the
 	 * packet sequence number.
@@ -73,6 +76,8 @@ bool chacha_poly1305_decrypt(chacha_poly1305_ctx_t *ctx, uint64_t seqnr, const v
 	const uint8_t one[8] = { 1, 0, 0, 0, 0, 0, 0, 0 };      /* NB little-endian */
 	uint8_t expected_tag[POLY1305_TAGLEN], poly_key[POLY1305_KEYLEN];
 	const uint8_t *indata = vindata;
+
+	assert(outlen == NULL || inlen <= *outlen + POLY1305_TAGLEN);
 
 	/*
 	 * Run ChaCha20 once to generate the Poly1305 key. The IV is the

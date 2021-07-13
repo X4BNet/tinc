@@ -41,7 +41,7 @@ extern bool cipher_open_blowfish_ofb(struct cipher *);
 extern void cipher_close(struct cipher *);
 extern size_t cipher_keylength(const struct cipher *);
 extern void cipher_get_key(const struct cipher *, void *);
-extern bool cipher_set_key(struct cipher *, void *, bool);
+extern bool cipher_set_key(struct cipher *, void *, unsigned char *, bool);
 extern bool cipher_set_key_from_rsa(struct cipher *, void *, size_t, bool);
 extern bool cipher_regenerate_key(struct cipher *, bool);
 extern bool cipher_encrypt(struct cipher *, const void *indata, size_t inlen, void *outdata, size_t *outlen, bool oneshot);

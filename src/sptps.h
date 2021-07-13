@@ -25,6 +25,7 @@
 #include "chacha-poly1305/chacha-poly1305.h"
 #include "ecdh.h"
 #include "ecdsa.h"
+#include "cipher.h"
 
 #define SPTPS_VERSION 0
 
@@ -45,6 +46,23 @@
 typedef bool (*send_data_t)(void *handle, uint8_t type, const void *data, size_t len);
 typedef bool (*receive_record_t)(void *handle, uint8_t type, const void *data, uint16_t len);
 
+typedef enum sptps_cipher_type {
+	SPTPS_CIPHER_CHACHA,
+	SPTPS_CIPHER_AES,
+	//SPTPS_CIPHER_TYPES
+} sptps_cipher_type_t;
+
+#define SPTPS_DEFAULT_CIPHER SPTPS_CIPHER_CHACHA
+
+typedef struct sptps_cipher {
+	enum sptps_cipher_type cipher;
+
+	union {
+		chacha_poly1305_ctx_t *chacha;
+		cipher_t *legcipher;             /* Cipher he will use to send data to us */
+	};
+} sptps_cipher_t;
+
 typedef struct sptps {
 	bool initiator;
 	bool datagram;
@@ -55,7 +73,7 @@ typedef struct sptps {
 	uint16_t reclen;
 
 	bool instate;
-	chacha_poly1305_ctx_t *incipher;
+	sptps_cipher_t incipher;
 	uint32_t inseqno;
 	uint32_t received;
 	unsigned int replaywin;
@@ -63,7 +81,7 @@ typedef struct sptps {
 	char *late;
 
 	bool outstate;
-	chacha_poly1305_ctx_t *outcipher;
+	sptps_cipher_t outcipher;
 	uint32_t outseqno;
 
 	ecdsa_t *mykey;
@@ -80,6 +98,15 @@ typedef struct sptps {
 	send_data_t send_data;
 	receive_record_t receive_record;
 } sptps_t;
+
+
+bool sptps_cipher_init(sptps_cipher_t *cipher, sptps_cipher_type_t ciphertype);
+int sptps_cipher_keylength(sptps_cipher_type_t ciphertype);
+bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt);
+void sptps_cipher_exit(sptps_cipher_t *cipher);
+bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *indata, size_t inlen, void *voutdata, size_t *outlen);
+bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vindata, size_t inlen, void *outdata, size_t *outlen);
+
 
 extern unsigned int sptps_replaywin;
 extern void sptps_log_quiet(sptps_t *s, int s_errno, const char *format, va_list ap);

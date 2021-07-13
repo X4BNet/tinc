@@ -24,8 +24,6 @@
 #define CIPHER_MAX_IV_SIZE 16
 #define CIPHER_MAX_KEY_SIZE 32
 
-#ifndef DISABLE_LEGACY
-
 typedef struct cipher cipher_t;
 
 extern cipher_t *cipher_open_by_name(const char *name) __attribute__((__malloc__));
@@ -34,13 +32,11 @@ extern void cipher_close(cipher_t *cipher);
 extern size_t cipher_keylength(const cipher_t *cipher);
 extern size_t cipher_blocksize(const cipher_t *cipher);
 extern uint64_t cipher_budget(const cipher_t *cipher);
-extern bool cipher_set_key(cipher_t *cipher, void *key, bool encrypt) __attribute__((__warn_unused_result__));
+extern bool cipher_set_key(cipher_t *cipher, void *key, unsigned char *iv, bool encrypt) __attribute__((__warn_unused_result__));
 extern bool cipher_set_key_from_rsa(cipher_t *cipher, void *rsa, size_t len, bool encrypt) __attribute__((__warn_unused_result__));
 extern bool cipher_encrypt(cipher_t *cipher, const void *indata, size_t inlen, void *outdata, size_t *outlen, bool oneshot) __attribute__((__warn_unused_result__));
 extern bool cipher_decrypt(cipher_t *cipher, const void *indata, size_t inlen, void *outdata, size_t *outlen, bool oneshot) __attribute__((__warn_unused_result__));
 extern int cipher_get_nid(const cipher_t *cipher);
 extern bool cipher_active(const cipher_t *cipher);
-
-#endif
 
 #endif
