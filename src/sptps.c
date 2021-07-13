@@ -182,7 +182,8 @@ bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vi
 
 // Send a record (datagram version, accepts all record types, handles encryption and authentication).
 static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
-	char buffer[len + 21UL];
+	size_t outlen = len + 21UL;  // + 4 (seqnum), +1 (type), + up to 16 block padding]
+	char buffer[outlen];
 
 	// Create header with sequence number, length and record type
 	uint32_t seqno = s->outseqno++;
@@ -194,8 +195,8 @@ static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data
 
 	if(s->outstate) {
 		// If first handshake has finished, encrypt and HMAC
-		sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 4, len + 1, buffer + 4, NULL);
-		return s->send_data(s->handle, type, buffer, len + 21UL);
+		sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 4, len + 1, buffer + 4, &outlen);
+		return s->send_data(s->handle, type, buffer, outlen + 5UL);
 	} else {
 		// Otherwise send as plaintext
 		return s->send_data(s->handle, type, buffer, len + 5UL);
