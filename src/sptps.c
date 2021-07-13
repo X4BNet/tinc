@@ -202,30 +202,38 @@ static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data
 		return s->send_data(s->handle, type, buffer, len + 5UL);
 	}
 }
-// Send a record (private version, accepts all record types, handles encryption and authentication).
-static bool send_record_priv(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
-	if(s->datagram) {
-		return send_record_priv_datagram(s, type, data, len);
-	}
 
+
+// Send a record (private version, accepts all record types, handles encryption and authentication).
+static bool send_record_priv_record(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
+	size_t outlen = len + 19UL;  // + 2 (netlen), +1 (type), + up to 16 block padding]
 	char buffer[len + 19UL];
 
 	// Create header with sequence number, length and record type
-	uint32_t seqno = s->outseqno++;
 	uint16_t netlen = htons(len);
 
 	memcpy(buffer, &netlen, 2);
 	buffer[2] = type;
 	memcpy(buffer + 3, data, len);
 
+	uint32_t seqno = s->outseqno++; // seqnum to be encrypted
 	if(s->outstate) {
 		// If first handshake has finished, encrypt and HMAC
-		sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 2, len + 1, buffer + 2, NULL);
+		sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 2, len + 1, buffer + 2, &outlen);
 		return s->send_data(s->handle, type, buffer, len + 19UL);
 	} else {
 		// Otherwise send as plaintext
 		return s->send_data(s->handle, type, buffer, len + 3UL);
 	}
+}
+
+
+static bool send_record_priv(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
+	if(s->datagram) {
+		return send_record_priv_datagram(s, type, data, len);
+	}
+
+	return send_record_priv_record(s, type, data, len);
 }
 
 // Send an application record.
