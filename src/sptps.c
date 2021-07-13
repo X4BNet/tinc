@@ -126,7 +126,7 @@ bool sptps_cipher_set_key(sptps_cipher_t *cipher, char *key, bool encrypt) {
 		return chacha_poly1305_set_key(cipher->chacha, key);
 
 	case SPTPS_CIPHER_AES:
-		return cipher_set_key(cipher->legcipher, key, key + 16, encrypt);
+		return cipher_set_key(cipher->legcipher, key, (unsigned char*)key + 16, encrypt);
 	}
 
 	return false;
@@ -156,7 +156,7 @@ bool sptps_cipher_encrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *in
 			outlen = &_outlen;
 		}
 
-		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true) && *outlen == inlen;
+		return cipher_encrypt(cipher->legcipher, indata, inlen, voutdata, outlen, true);
 	}
 
 	return false;
@@ -182,7 +182,7 @@ bool sptps_cipher_decrypt(sptps_cipher_t *cipher, uint64_t seqnr, const void *vi
 
 // Send a record (datagram version, accepts all record types, handles encryption and authentication).
 static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
-	size_t outlen = len + 21UL;  // + 4 (seqnum), +1 (type), + up to 16 block padding]
+	size_t outlen = len + 21UL;  // + 4 (seqnum), +1 (type), + up to 16 block padding / polly checksum
 	char buffer[outlen];
 
 	// Create header with sequence number, length and record type
@@ -190,7 +190,7 @@ static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data
 	uint32_t netseqno = ntohl(seqno);
 
 	memcpy(buffer, &netseqno, 4);
-	buffer[4] = type;
+	buffer[4] = type; // encryption starts here
 	memcpy(buffer + 5, data, len);
 
 	if(s->outstate) {
@@ -206,21 +206,21 @@ static bool send_record_priv_datagram(sptps_t *s, uint8_t type, const void *data
 
 // Send a record (private version, accepts all record types, handles encryption and authentication).
 static bool send_record_priv_record(sptps_t *s, uint8_t type, const void *data, uint16_t len) {
-	size_t outlen = len + 19UL;  // + 2 (netlen), +1 (type), + up to 16 block padding]
+	size_t outlen = len + 19UL;  // + 2 (netlen), +1 (type), + up to 16 block padding / polly checksum
 	char buffer[len + 19UL];
 
 	// Create header with sequence number, length and record type
 	uint16_t netlen = htons(len);
 
 	memcpy(buffer, &netlen, 2);
-	buffer[2] = type;
+	buffer[2] = type; // encryption starts here
 	memcpy(buffer + 3, data, len);
 
 	uint32_t seqno = s->outseqno++; // seqnum to be encrypted
 	if(s->outstate) {
 		// If first handshake has finished, encrypt and HMAC
 		sptps_cipher_encrypt(&s->outcipher, seqno, buffer + 2, len + 1, buffer + 2, &outlen);
-		return s->send_data(s->handle, type, buffer, len + 19UL);
+		return s->send_data(s->handle, type, buffer, outlen);
 	} else {
 		// Otherwise send as plaintext
 		return s->send_data(s->handle, type, buffer, len + 3UL);

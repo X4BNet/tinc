@@ -52,7 +52,7 @@ typedef enum sptps_cipher_type {
 	//SPTPS_CIPHER_TYPES
 } sptps_cipher_type_t;
 
-#define SPTPS_DEFAULT_CIPHER SPTPS_CIPHER_AES
+#define SPTPS_DEFAULT_CIPHER SPTPS_CIPHER_CHACHA
 
 typedef struct sptps_cipher {
 	enum sptps_cipher_type cipher;
